@@ -1,5 +1,6 @@
 #import "NaplesDockView.h"
 #import "NaplesX.h"
+#import "NaplesPanel.h"
 
 enum { Pad = 6, Gap = 4, DividerLen = 10, OuterMargin = 13, InnerMargin = 11, BounceH = 9, Radius = 5, EntryH = 22, LongClickMs = 500 };
 
@@ -38,7 +39,7 @@ draggable(NaplesItem *it)
 
 - (void) dealloc
 {
-	[backdrop release]; [items release]; [slots release]; [menuEntries release]; [downEvent release];
+	[backdrop release]; [items release]; [slots release]; [panelSet release]; [menuEntries release]; [downEvent release];
 	[super dealloc];
 }
 
@@ -99,12 +100,8 @@ draggable(NaplesItem *it)
 }
 
 - (NSSize) barSize { return barSize; }
-- (BOOL) menuOpen { return menuEntries != nil; }
-- (NSSize) menuSize { return menuSize; }
-- (NSRect) menuAnchor { return menuAnchor; }
-- (NSPoint) menuPointer { return menuPointer; }
+- (BOOL) menuOpen { return [panelSet isShowing]; }
 - (NSRect) barRect { return NSMakeRect(barOrigin.x, barOrigin.y, barSize.width, barSize.height); }
-- (NSRect) menuRect { return NSMakeRect(menuOrigin.x, menuOrigin.y, menuSize.width, menuSize.height); }
 
 - (NSRect) slotRect: (NSInteger)i
 {
@@ -113,10 +110,10 @@ draggable(NaplesItem *it)
 	return r;
 }
 
-- (void) setBarOrigin: (NSPoint)bar menuOrigin: (NSPoint)menu
+- (void) setBarOrigin: (NSPoint)bar
 {
 	NSInteger i;
-	barOrigin = bar; menuOrigin = menu;
+	barOrigin = bar;
 	[self removeAllToolTips];
 	for (i = 0; i < (NSInteger)[items count]; i++) {
 		NaplesItem *it = [items objectAtIndex: i];
@@ -251,9 +248,11 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 	if (backdrop) {	/* translucent: the wallpaper under the bar, darkened */
 		NSRect src = NSZeroRect;
 		src.size = [backdrop size];
+		/* the wallpaper over the whole window first: what the rounded corners leave outside the bar is then the desktop's
+		 * own picture, not the black this server leaves where a shaped window is cut */
+		[backdrop drawInRect: bar fromRect: src operation: NSCompositeSourceOver fraction: 1.0];
 		[NSGraphicsContext saveGraphicsState];
 		[rounded(bar) addClip];
-		[backdrop drawInRect: bar fromRect: src operation: NSCompositeSourceOver fraction: 1.0];
 		[[NSColor colorWithCalibratedWhite: 0.05 alpha: 0.38] set];
 		NSRectFillUsingOperation(bar, NSCompositeSourceOver);
 		[NSGraphicsContext restoreGraphicsState];
@@ -310,62 +309,70 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 		if ([self horizontal]) NSRectFill(NSMakeRect(NSMinX(r) - Gap / 2.0 - 1, NSMinY(r), 2, r.size.height));
 		else NSRectFill(NSMakeRect(NSMinX(r), NSMaxY(r) + Gap / 2.0 - 1, r.size.width, 2));
 	}
-
-	if ([self menuOpen]) {
-		NSRect m = [self menuRect];
-		NSDictionary *attrs = [NSDictionary dictionaryWithObjectsAndKeys: [NSFont systemFontOfSize: 12], NSFontAttributeName,
-		                       [NSColor whiteColor], NSForegroundColorAttributeName, nil];
-		[[NSColor colorWithCalibratedWhite: 0.12 alpha: 0.92] set];
-		[rounded(m) fill];
-		[[NSColor colorWithCalibratedWhite: 1 alpha: 0.3] set];
-		[rounded(NSInsetRect(m, 0.5, 0.5)) stroke];
-		for (i = 0; i < (NSInteger)[menuEntries count]; i++) {
-			NaplesMenuEntry *e = [menuEntries objectAtIndex: i];
-			NSRect er = NSMakeRect(m.origin.x + 4, NSMaxY(m) - 4 - EntryH * (i + 1), m.size.width - 8, EntryH);
-			if (i == menuHover) {
-				[[NSColor colorWithCalibratedRed: 0.2 green: 0.45 blue: 0.85 alpha: 1] set];
-				[[NSBezierPath bezierPathWithRoundedRect: er xRadius: 3 yRadius: 3] fill];
-			}
-			[e->title drawAtPoint: NSMakePoint(er.origin.x + 8, er.origin.y + 4) withAttributes: attrs];
-		}
-	}
 }
 
-/* ---- the long-click menu ---- */
+/* ---- the long-click menu: a panel window next to the item (NaplesPanel), actions run from the entries ---- */
 
 - (void) openMenuWithEntries: (NSArray *)entries anchor: (NSRect)slot pointer: (NSPoint)p
 {
-	NSDictionary *attrs = [NSDictionary dictionaryWithObject: [NSFont systemFontOfSize: 12] forKey: NSFontAttributeName];
-	CGFloat w = 120;
+	NSMutableArray *dicts = [NSMutableArray array];
 	NaplesMenuEntry *e;
+	NaplesPanel *panel;
+	NSRect scr = [[NSScreen mainScreen] frame], wf = [[self window] frame], bar, m;
+	NSPoint c;
+	int dockEdge = [dock edge];
 	if (![entries count]) return;
-	for (e in entries) {
-		CGFloat tw = [e->title sizeWithAttributes: attrs].width + 28;
-		if (tw > w) w = tw;
-	}
+	for (e in entries)
+		[dicts addObject: [NSDictionary dictionaryWithObjectsAndKeys: e->title, @"title", [NSNumber numberWithBool: YES], @"enabled",
+		                   [NSNumber numberWithInt: 0], @"state", nil]];
 	[menuEntries release]; menuEntries = [entries retain];
-	menuSize = NSMakeSize(w, 8 + EntryH * [entries count]);
-	menuAnchor = slot; menuPointer = p; menuHover = -1;
-	[dock menuChanged];
+	menuHover = -1;
+	panel = [NaplesPanel panelWithItems: dicts x: 0 top: 0 style: NaplesPanelDark];
+	/* the panel's rectangle in screen coordinates (bottom-left origin): beside the item, away from the screen edge */
+	bar = NSMakeRect(wf.origin.x + barOrigin.x, wf.origin.y + barOrigin.y, barSize.width, barSize.height);
+	c = NSEqualRects(slot, NSZeroRect) ? NSMakePoint(bar.origin.x + p.x, bar.origin.y + p.y) : NSMakePoint(NSMidX(slot) + bar.origin.x, NSMidY(slot) + bar.origin.y);
+	if (dockEdge == NaplesEdgeBottom) m = NSMakeRect(c.x - panel->w / 2, NSMaxY(bar) + 4, panel->w, panel->h);
+	else if (dockEdge == NaplesEdgeLeft) m = NSMakeRect(NSMaxX(bar) + 4, c.y - panel->h / 2, panel->w, panel->h);
+	else m = NSMakeRect(bar.origin.x - 4 - panel->w, c.y - panel->h / 2, panel->w, panel->h);
+	if (NSMaxX(m) > NSMaxX(scr)) m.origin.x = NSMaxX(scr) - m.size.width;
+	if (NSMinX(m) < NSMinX(scr)) m.origin.x = NSMinX(scr);
+	if (NSMaxY(m) > NSMaxY(scr)) m.origin.y = NSMaxY(scr) - m.size.height;
+	if (NSMinY(m) < NSMinY(scr)) m.origin.y = NSMinY(scr);
+	panel->x = m.origin.x - scr.origin.x;
+	panel->top = NSMaxY(scr) - NSMaxY(m);
+	if (!panelSet) panelSet = [[NaplesPanelSet alloc] initWithDelegate: self];
+	[panelSet showPanels: [NSArray arrayWithObject: panel]];
 }
 
 - (void) closeMenu
 {
-	if (!menuEntries) return;
 	[NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(closeMenu) object: nil];
+	if (![panelSet isShowing]) return;
+	[panelSet hide];
 	[menuEntries release]; menuEntries = nil;
-	[dock menuChanged];
 	[self setNeedsDisplay: YES];
 }
 
-- (NSInteger) menuIndexAt: (NSPoint)p
+- (void) panelSet: (id)set level: (NSInteger)level hoverRow: (NSInteger)row
 {
-	NSRect m = [self menuRect];
-	NSInteger i;
-	if (![self menuOpen] || !NSPointInRect(p, m)) return -1;
-	i = (NSInteger)((NSMaxY(m) - 4 - p.y) / EntryH);
-	return i >= 0 && i < (NSInteger)[menuEntries count] ? i : -1;
+	NaplesPanel *p = [[panelSet panels] firstObject];
+	if (!p || p->hoverRow == row) return;
+	p->hoverRow = row;
+	[panelSet showPanels: [panelSet panels]];
 }
+
+- (void) panelSet: (id)set level: (NSInteger)level clickedRow: (NSInteger)row
+{
+	NaplesMenuEntry *entry;
+	if (row < 0 || row >= (NSInteger)[menuEntries count]) return;
+	entry = [[menuEntries objectAtIndex: row] retain];
+	[self closeMenu];
+	if (entry->action) entry->action();
+	[entry release];
+}
+
+- (void) panelSetPointerEntered: (id)set { [self mouseEntered: nil]; }
+- (void) panelSetPointerExited: (id)set { [self mouseExited: nil]; }
 
 - (void) showMenuForIndex: (NSInteger)i
 {
@@ -384,12 +391,6 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 {
 	longFired = YES;
 	[self showMenuForIndex: downIndex];
-}
-
-- (void) mouseMoved: (NSEvent *)e
-{
-	NSInteger h = [self menuIndexAt: [self convertPoint: [e locationInWindow] fromView: nil]];
-	if (h != menuHover) { menuHover = h; [self setNeedsDisplay: YES]; }
 }
 
 /* the menu closes a moment after the pointer leaves the dock */
@@ -420,18 +421,7 @@ edgeForPoint(NSPoint p)
 - (void) mouseDown: (NSEvent *)e
 {
 	NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
-	if ([self menuOpen]) {
-		NSInteger m = [self menuIndexAt: p];
-		if (m >= 0) {
-			NaplesMenuEntry *entry = [[menuEntries objectAtIndex: m] retain];
-			[self closeMenu];
-			if (entry->action) entry->action();
-			[entry release];
-			return;
-		}
-		[self closeMenu];
-		return;
-	}
+	if ([self menuOpen]) { [self closeMenu]; return; }
 	[downEvent release]; downEvent = [e retain];
 	downPoint = [NSEvent mouseLocation];
 	downIndex = [self hitIndex: p];

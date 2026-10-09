@@ -1,56 +1,21 @@
 #import "NaplesBarView.h"
 #import "NaplesBar.h"
+#import "NaplesPanel.h"
 #include <time.h>
 
-enum { BarH = 22, RowH = 20, SepH = 9, PanelPad = 4, Radius = 5, MinPanelW = 150, TitlesX = 44 };
-
-static NSBezierPath *
-rounded(NSRect r)
-{
-	return [NSBezierPath bezierPathWithRoundedRect: r xRadius: Radius yRadius: Radius];
-}
+enum { BarH = 22, Radius = 5, TitlesX = 44 };
 
 static BOOL
 isSep(NSDictionary *item)
 {
-	return [[item objectForKey: @"isSeparator"] boolValue];
+	return NaplesIsSeparator(item);
 }
 
 static NSDictionary *
 textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 {
-	NSColor *c = selected ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 0.08 alpha: enabled ? 1.0 : 0.38];
-	return [NSDictionary dictionaryWithObjectsAndKeys: bold ? [NSFont boldSystemFontOfSize: 12] : [NSFont systemFontOfSize: 12], NSFontAttributeName,
-	        c, NSForegroundColorAttributeName, nil];
+	return NaplesMenuTextAttrs(NaplesPanelLight, enabled, selected, bold);
 }
-
-/* "⌘C": modifier glyphs then the key */
-static NSString *
-keyString(NSDictionary *item)
-{
-	NSString *k = [item objectForKey: @"keyEquivalent"];
-	NSUInteger m = [[item objectForKey: @"keyEquivalentModifierMask"] unsignedIntegerValue];
-	NSMutableString *s = [NSMutableString string];
-	if (![k length]) return nil;
-	if (m & (1 << 18)) [s appendString: @"⌃"];
-	if (m & (1 << 19)) [s appendString: @"⌥"];
-	if (m & (1 << 17)) [s appendString: @"⇧"];
-	if (m & (1 << 20)) [s appendString: @"⌘"];
-	[s appendString: [k uppercaseString]];
-	return s;
-}
-
-/* one open drop-down or cascade level, in top-down coordinates (y measured from the top of the screen) */
-@interface NaplesPanel : NSObject {
-@public
-	NSArray *items;
-	CGFloat x, top, w, h;
-	NSMutableArray *rowTops;	/* NSNumber offsets from the panel's top, per item */
-}
-@end
-@implementation NaplesPanel
-- (void) dealloc { [items release]; [rowTops release]; [super dealloc]; }
-@end
 
 @implementation NaplesBarView
 
@@ -73,7 +38,7 @@ keyString(NSDictionary *item)
 	[self setNeedsDisplay: YES];
 }
 
-- (void) dealloc { [backdrop release]; [titleRects release]; [titleIdx release]; [chain release]; [super dealloc]; }
+- (void) dealloc { [panelSet release]; [backdrop release]; [titleRects release]; [titleIdx release]; [chain release]; [super dealloc]; }
 
 - (BOOL) isFlipped { return NO; }
 - (BOOL) isOpaque { return NO; }
@@ -122,39 +87,18 @@ keyString(NSDictionary *item)
 	return nil;
 }
 
-- (NaplesPanel *) panelForItems: (NSArray *)items x: (CGFloat)x top: (CGFloat)top
-{
-	NaplesPanel *p = [[[NaplesPanel alloc] init] autorelease];
-	CGFloat y = PanelPad, w = MinPanelW;
-	NSDictionary *it;
-	p->items = [items retain];
-	p->rowTops = [[NSMutableArray alloc] init];
-	for (it in items) {
-		[p->rowTops addObject: [NSNumber numberWithDouble: y]];
-		if (isSep(it)) { y += SepH; continue; }
-		{
-			CGFloat tw = [[it objectForKey: @"title"] sizeWithAttributes: textAttrs(YES, NO, NO)].width + 36;
-			NSString *k = keyString(it);
-			if (k) tw += [k sizeWithAttributes: textAttrs(YES, NO, NO)].width + 24;
-			if (tw > w) w = tw;
-		}
-		y += RowH;
-	}
-	p->x = x; p->top = top; p->w = w; p->h = y + PanelPad;
-	return p;
-}
+/* ---- the drop-down and its cascades: one window per panel (NaplesPanel), placed from the open state ---- */
 
-- (NSArray *) panels
+- (NSArray *) buildPanels
 {
 	NSMutableArray *out = [NSMutableArray array];
-	NSDictionary *root = [self rootMenu];
-	NSArray *items = [root objectForKey: @"items"];
-	NaplesPanel *p, *prev = nil;
-	CGFloat W = [self bounds].size.width, x;
+	NSArray *items = [[self rootMenu] objectForKey: @"items"];
+	NaplesPanel *p, *prev;
+	CGFloat W = [[NSScreen mainScreen] frame].size.width, x;
 	NSUInteger level;
-	if (!items || ![items count] || openTop == -1) return out;
+	if (![items count] || openTop == -1) return out;
 	x = openTop == -2 ? hexleyRect.origin.x : [self titleRectForIndex: openTop].origin.x;
-	p = [self panelForItems: items x: x top: BarH];
+	p = [NaplesPanel panelWithItems: items x: x top: BarH style: NaplesPanelLight];
 	if (p->x + p->w > W) p->x = W - p->w;
 	[out addObject: p];
 	for (level = 0; level < [chain count]; level++) {
@@ -164,63 +108,40 @@ keyString(NSDictionary *item)
 		NaplesPanel *n;
 		if (![sub count]) break;
 		prev = p;
-		n = [self panelForItems: sub x: prev->x + prev->w - 2 top: prev->top + [[prev->rowTops objectAtIndex: row] doubleValue]];
+		prev->openRow = row;
+		n = [NaplesPanel panelWithItems: sub x: prev->x + prev->w - 2 top: prev->top + [[prev->rowTops objectAtIndex: row] doubleValue] style: NaplesPanelLight];
 		if (n->x + n->w > W) n->x = prev->x - n->w + 2;
 		[out addObject: n];
 		p = n;
 	}
+	if (hoverLevel >= 0 && hoverLevel < (NSInteger)[out count]) ((NaplesPanel *)[out objectAtIndex: hoverLevel])->hoverRow = hoverRow;
 	return out;
 }
 
-- (CGFloat) desiredHeight
+- (void) refreshPanels
 {
-	CGFloat h = BarH;
-	NaplesPanel *p;
-	for (p in [self panels]) if (p->top + p->h > h) h = p->top + p->h;
-	return h;
+	NSArray *panels = [self buildPanels];
+	if (![panels count]) { [panelSet hide]; return; }
+	if (!panelSet) panelSet = [[NaplesPanelSet alloc] initWithDelegate: self];
+	[panelSet showPanels: panels];
 }
 
-- (NSRect) viewRectForTopDown: (CGFloat)x top: (CGFloat)top w: (CGFloat)w h: (CGFloat)h
-{
-	return NSMakeRect(x, [self bounds].size.height - top - h, w, h);
-}
+- (CGFloat) desiredHeight { return BarH; }	/* the bar window never grows: menus have their own windows */
 
 - (NSArray *) shapeRects
 {
-	NSMutableArray *out = [NSMutableArray array];
-	NaplesPanel *p;
-	[out addObject: [NSValue valueWithRect: NSMakeRect(0, 0, [self bounds].size.width, BarH)]];
-	for (p in [self panels]) [out addObject: [NSValue valueWithRect: NSMakeRect(p->x, p->top, p->w, p->h)]];
-	return out;
+	return [NSArray arrayWithObject: [NSValue valueWithRect: NSMakeRect(0, 0, [self bounds].size.width, BarH)]];
 }
 
 /* ---- drawing ---- */
-
-static void
-drawCheck(NSRect r, NSInteger state, BOOL selected)
-{
-	NSBezierPath *p = [NSBezierPath bezierPath];
-	[(selected ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 0.08 alpha: 0.9]) set];
-	[p setLineWidth: 1.6];
-	if (state == 1) {
-		[p moveToPoint: NSMakePoint(NSMinX(r) + 1, NSMidY(r))];
-		[p lineToPoint: NSMakePoint(NSMinX(r) + 4, NSMidY(r) - 3)];
-		[p lineToPoint: NSMakePoint(NSMinX(r) + 10, NSMidY(r) + 4)];
-	} else {
-		[p moveToPoint: NSMakePoint(NSMinX(r) + 2, NSMidY(r))];
-		[p lineToPoint: NSMakePoint(NSMinX(r) + 9, NSMidY(r))];
-	}
-	[p stroke];
-}
 
 - (void) drawRect: (NSRect)dirty
 {
 	NSRect bounds = [self bounds];
 	NSRect barR = NSMakeRect(0, bounds.size.height - BarH, bounds.size.width, BarH);
-	NSArray *items = [self topItems], *panels = [self panels];
+	NSArray *items = [self topItems];
 	NSImage *h = [bar hexley];
 	NSUInteger k;
-	NaplesPanel *p;
 	time_t t = time(NULL);
 	struct tm tm;
 	char buf[64];
@@ -242,7 +163,7 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 	NSRectFill(NSMakeRect(0, barR.origin.y, barR.size.width, 1));
 
 	{	/* Hexley, where the Apple logo would be */
-		NSRect hr = [self viewRectForTopDown: hexleyRect.origin.x top: 0 w: hexleyRect.size.width h: BarH];
+		NSRect hr = NSMakeRect(hexleyRect.origin.x, barR.origin.y, hexleyRect.size.width, BarH);
 		if (openTop == -2) { [[NSColor colorWithCalibratedWhite: 0 alpha: 0.14] set]; NSRectFill(hr); }
 		if (h) {
 			CGFloat hh = 16, hw = [h size].width * hh / [h size].height;
@@ -260,10 +181,10 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 		NSDictionary *it = [items objectAtIndex: idx];
 		NSRect r = [[titleRects objectAtIndex: k] rectValue];
 		BOOL sel = idx == openTop;
-		NSRect vr = [self viewRectForTopDown: r.origin.x top: 0 w: r.size.width h: BarH];
+		NSRect vr = NSMakeRect(r.origin.x, barR.origin.y, r.size.width, BarH);
 		if (sel) { [[NSColor colorWithCalibratedRed: 0.2 green: 0.45 blue: 0.85 alpha: 1] set]; NSRectFill(vr); }
 		[[it objectForKey: @"title"] drawAtPoint: NSMakePoint(vr.origin.x + 9, vr.origin.y + 4)
-		                          withAttributes: textAttrs([[it objectForKey: @"enabled"] boolValue], sel, k == 0 && NO)];
+		                          withAttributes: textAttrs([[it objectForKey: @"enabled"] boolValue], sel, NO)];
 	}
 
 	localtime_r(&t, &tm);
@@ -271,69 +192,9 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 	clock = [NSString stringWithUTF8String: buf];
 	cs = [clock sizeWithAttributes: ca];
 	[clock drawAtPoint: NSMakePoint(bounds.size.width - cs.width - 12, barR.origin.y + 4) withAttributes: ca];
-
-	for (p in panels) {
-		NSRect pr = [self viewRectForTopDown: p->x top: p->top w: p->w h: p->h];
-		NSUInteger lvl = [panels indexOfObject: p], i;
-		[[NSColor colorWithCalibratedWhite: 0.97 alpha: 0.98] set];
-		[rounded(pr) fill];
-		[[NSColor colorWithCalibratedWhite: 0 alpha: 0.35] set];
-		[rounded(NSInsetRect(pr, 0.5, 0.5)) stroke];
-		for (i = 0; i < [p->items count]; i++) {
-			NSDictionary *it = [p->items objectAtIndex: i];
-			CGFloat rt = [[p->rowTops objectAtIndex: i] doubleValue];
-			NSRect rr = [self viewRectForTopDown: p->x + 4 top: p->top + rt w: p->w - 8 h: isSep(it) ? SepH : RowH];
-			BOOL enabled = [[it objectForKey: @"enabled"] boolValue], sel;
-			NSString *ks;
-			if (isSep(it)) {
-				[[NSColor colorWithCalibratedWhite: 0 alpha: 0.2] set];
-				NSRectFill(NSMakeRect(rr.origin.x + 4, NSMidY(rr), rr.size.width - 8, 1));
-				continue;
-			}
-			sel = enabled && ((NSInteger)lvl == hoverLevel && (NSInteger)i == hoverRow);
-			if (!sel && lvl < [chain count] && (NSInteger)i == [[chain objectAtIndex: lvl] integerValue]) sel = enabled;
-			if (sel) {
-				[[NSColor colorWithCalibratedRed: 0.2 green: 0.45 blue: 0.85 alpha: 1] set];
-				[[NSBezierPath bezierPathWithRoundedRect: rr xRadius: 3 yRadius: 3] fill];
-			}
-			if ([[it objectForKey: @"state"] integerValue] != 0) drawCheck(NSMakeRect(rr.origin.x + 5, rr.origin.y, 12, rr.size.height), [[it objectForKey: @"state"] integerValue], sel);
-			[[it objectForKey: @"title"] drawAtPoint: NSMakePoint(rr.origin.x + 20, rr.origin.y + 3) withAttributes: textAttrs(enabled, sel, NO)];
-			if ((ks = keyString(it))) {
-				NSDictionary *a = textAttrs(enabled, sel, NO);
-				[ks drawAtPoint: NSMakePoint(NSMaxX(rr) - [ks sizeWithAttributes: a].width - 10, rr.origin.y + 3) withAttributes: a];
-			}
-			if ([it objectForKey: @"submenu"]) {	/* cascade arrow */
-				NSBezierPath *ar = [NSBezierPath bezierPath];
-				[(sel ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 0.08 alpha: enabled ? 0.8 : 0.35]) set];
-				[ar moveToPoint: NSMakePoint(NSMaxX(rr) - 12, NSMidY(rr) + 4)];
-				[ar lineToPoint: NSMakePoint(NSMaxX(rr) - 7, NSMidY(rr))];
-				[ar lineToPoint: NSMakePoint(NSMaxX(rr) - 12, NSMidY(rr) - 4)];
-				[ar fill];
-			}
-		}
-	}
 }
 
-/* ---- hit testing and mouse ---- */
-
-/* returns the panel level and row under p (view coordinates), or level -1 */
-- (void) panelHit: (NSPoint)p level: (NSInteger *)level row: (NSInteger *)row
-{
-	NSArray *panels = [self panels];
-	NSInteger l;
-	*level = -1; *row = -1;
-	for (l = (NSInteger)[panels count] - 1; l >= 0; l--) {
-		NaplesPanel *pn = [panels objectAtIndex: l];
-		NSUInteger i;
-		if (!NSPointInRect(p, [self viewRectForTopDown: pn->x top: pn->top w: pn->w h: pn->h])) continue;
-		*level = l;
-		for (i = 0; i < [pn->items count]; i++) {
-			CGFloat rt = [[pn->rowTops objectAtIndex: i] doubleValue], hgt = isSep([pn->items objectAtIndex: i]) ? SepH : RowH;
-			if (NSPointInRect(p, [self viewRectForTopDown: pn->x top: pn->top + rt w: pn->w h: hgt])) { *row = i; break; }
-		}
-		return;
-	}
-}
+/* ---- the bar's own mouse handling ---- */
 
 /* -1 nothing, -2 Hexley, else the item index of the title under p */
 - (NSInteger) barHit: (NSPoint)p
@@ -355,7 +216,7 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 	hoverLevel = hoverRow = -1;
 	openTop = t;
 	if (t != -1) [bar prepareMenu];	/* fresh enabled/checked state from the application, as it is about to be shown */
-	[bar viewResized];
+	[self refreshPanels];
 	[self setNeedsDisplay: YES];
 }
 
@@ -364,37 +225,13 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 	[NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(closeMenu) object: nil];
 	if (openTop == -1) return;
 	openTop = -1; [chain removeAllObjects]; hoverLevel = hoverRow = -1;
-	[bar viewResized];
+	[panelSet hide];
 	[self setNeedsDisplay: YES];
 }
 
 - (void) mouseDown: (NSEvent *)e
 {
-	NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
-	NSInteger level, row, b;
-	[self panelHit: p level: &level row: &row];
-	if (level >= 0) {
-		NaplesPanel *pn = [[self panels] objectAtIndex: level];
-		NSDictionary *it;
-		NSMutableArray *path;
-		NSInteger i;
-		if (row < 0) return;
-		it = [pn->items objectAtIndex: row];
-		if (isSep(it) || ![[it objectForKey: @"enabled"] boolValue] || [it objectForKey: @"submenu"]) return;
-		if (openTop == -2) {
-			void (^blk)(void) = [it objectForKey: @"block"];
-			[self closeMenu];
-			if (blk) blk();
-			return;
-		}
-		path = [NSMutableArray arrayWithObject: [NSNumber numberWithInteger: openTop]];
-		for (i = 0; i < level; i++) [path addObject: [chain objectAtIndex: i]];
-		[path addObject: [NSNumber numberWithInteger: row]];
-		[self closeMenu];
-		[bar activatePath: path];
-		return;
-	}
-	b = [self barHit: p];
+	NSInteger b = [self barHit: [self convertPoint: [e locationInWindow] fromView: nil]];
 	if (b == -1) { [self closeMenu]; return; }
 	if (b == openTop) [self closeMenu];
 	else [self openTopItem: b];
@@ -402,29 +239,59 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 
 - (void) mouseMoved: (NSEvent *)e
 {
-	NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
-	NSInteger level, row, b;
+	NSInteger b;
 	if (openTop == -1) return;
-	[self panelHit: p level: &level row: &row];
-	if (level >= 0) {
-		NaplesPanel *pn = [[self panels] objectAtIndex: level];
-		NSDictionary *it = row >= 0 ? [pn->items objectAtIndex: row] : nil;
-		if (level != hoverLevel || row != hoverRow) {
-			hoverLevel = level; hoverRow = row;
-			while ((NSInteger)[chain count] > level) [chain removeLastObject];	/* close deeper cascades */
-			if (it && !isSep(it) && [it objectForKey: @"submenu"] && [[it objectForKey: @"enabled"] boolValue])
-				[chain addObject: [NSNumber numberWithInteger: row]];
-			[bar viewResized];
-			[self setNeedsDisplay: YES];
-		}
-		return;
-	}
-	b = [self barHit: p];
+	b = [self barHit: [self convertPoint: [e locationInWindow] fromView: nil]];
 	if (b != -1 && b != openTop) [self openTopItem: b];	/* sliding along the bar switches menus */
 }
 
 - (void) mouseEntered: (NSEvent *)e { [NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(closeMenu) object: nil]; }
 - (void) mouseExited: (NSEvent *)e { if (openTop != -1) [self performSelector: @selector(closeMenu) withObject: nil afterDelay: 1.2]; }
+
+/* ---- the panels' mouse handling (NaplesPanelDelegate) ---- */
+
+- (void) panelSet: (id)set level: (NSInteger)level hoverRow: (NSInteger)row
+{
+	NSArray *panels = [panelSet panels];
+	NaplesPanel *pn;
+	NSDictionary *it;
+	if (level < 0 || level >= (NSInteger)[panels count]) return;
+	if (level == hoverLevel && row == hoverRow) return;
+	pn = [panels objectAtIndex: level];
+	it = row >= 0 && row < (NSInteger)[pn->items count] ? [pn->items objectAtIndex: row] : nil;
+	hoverLevel = level; hoverRow = row;
+	while ((NSInteger)[chain count] > level) [chain removeLastObject];	/* close deeper cascades */
+	if (it && !isSep(it) && [it objectForKey: @"submenu"] && [[it objectForKey: @"enabled"] boolValue])
+		[chain addObject: [NSNumber numberWithInteger: row]];
+	[self refreshPanels];
+}
+
+- (void) panelSet: (id)set level: (NSInteger)level clickedRow: (NSInteger)row
+{
+	NSArray *panels = [panelSet panels];
+	NaplesPanel *pn;
+	NSDictionary *it;
+	NSMutableArray *path;
+	NSInteger i;
+	if (level < 0 || level >= (NSInteger)[panels count] || row < 0) return;
+	pn = [panels objectAtIndex: level];
+	it = [pn->items objectAtIndex: row];
+	if (isSep(it) || ![[it objectForKey: @"enabled"] boolValue] || [it objectForKey: @"submenu"]) return;
+	if (openTop == -2) {
+		void (^blk)(void) = [it objectForKey: @"block"];
+		[self closeMenu];
+		if (blk) blk();
+		return;
+	}
+	path = [NSMutableArray arrayWithObject: [NSNumber numberWithInteger: openTop]];
+	for (i = 0; i < level; i++) [path addObject: [chain objectAtIndex: i]];
+	[path addObject: [NSNumber numberWithInteger: row]];
+	[self closeMenu];
+	[bar activatePath: path];
+}
+
+- (void) panelSetPointerEntered: (id)set { [self mouseEntered: nil]; }
+- (void) panelSetPointerExited: (id)set { [self mouseExited: nil]; }
 
 - (void) retrack
 {

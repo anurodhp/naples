@@ -133,7 +133,6 @@ bundleOfExecutable(NSString *exe)
 	BOOL reserve = ![d objectForKey: @"NaplesReserveSpace"] || [d boolForKey: @"NaplesReserveSpace"];
 	NSRect scr = [[NSScreen mainScreen] frame], bar = [window frame];
 	if (xid) {
-		if ([view menuOpen]) bar = NSOffsetRect([view barRect], bar.origin.x, bar.origin.y);
 		bar.origin.y = scr.size.height - NSMaxY(bar);	/* X: top-left origin */
 		[[NaplesX shared] setDockHints: xid edge: edge barRect: bar reserve: reserve opacity: 1.0];
 	}
@@ -285,7 +284,6 @@ bundleOfExecutable(NSString *exe)
 	}
 }
 
-- (void) menuChanged { [self relayout]; }
 
 - (void) reshapeLater: (NSArray *)rects
 {
@@ -307,10 +305,9 @@ bundleOfExecutable(NSString *exe)
 
 - (void) relayoutNow
 {
-	NSRect scr = [[NSScreen mainScreen] frame], bar, menu = NSZeroRect, frame;
+	NSRect scr = [[NSScreen mainScreen] frame], bar, frame;
 	NSSize bs;
 	NSMutableArray *shape = [NSMutableArray array];
-	NSPoint barLocal, menuLocal = NSZeroPoint;
 	NSRect r;
 	if (!window || !items) return;
 	[view reloadItems: items edge: edge maxLength: (edge == NaplesEdgeBottom ? scr.size.width : scr.size.height) - 40];
@@ -320,35 +317,14 @@ bundleOfExecutable(NSString *exe)
 	else bar = NSMakeRect(NSMaxX(scr) - bs.width - ScreenMargin, NSMinY(scr) + (scr.size.height - bs.height) / 2, bs.width, bs.height);
 	frame = bar;
 
-	if ([view menuOpen]) {	/* the window grows to hold the menu overlay next to the item it belongs to */
-		NSSize ms = [view menuSize];
-		NSRect anchor = [view menuAnchor];
-		NSPoint c = NSEqualRects(anchor, NSZeroRect) ? NSMakePoint(bar.origin.x + [view menuPointer].x, bar.origin.y + [view menuPointer].y)
-		                                           : NSMakePoint(bar.origin.x + NSMidX(anchor), bar.origin.y + NSMidY(anchor));
-		if (edge == NaplesEdgeBottom) menu = NSMakeRect(c.x - ms.width / 2, NSMaxY(bar) + 4, ms.width, ms.height);
-		else if (edge == NaplesEdgeLeft) menu = NSMakeRect(NSMaxX(bar) + 4, c.y - ms.height / 2, ms.width, ms.height);
-		else menu = NSMakeRect(bar.origin.x - 4 - ms.width, c.y - ms.height / 2, ms.width, ms.height);
-		if (NSMaxX(menu) > NSMaxX(scr)) menu.origin.x = NSMaxX(scr) - menu.size.width;
-		if (NSMinX(menu) < NSMinX(scr)) menu.origin.x = NSMinX(scr);
-		if (NSMaxY(menu) > NSMaxY(scr)) menu.origin.y = NSMaxY(scr) - menu.size.height;
-		if (NSMinY(menu) < NSMinY(scr)) menu.origin.y = NSMinY(scr);
-		frame = NSUnionRect(bar, menu);
-	}
-	barLocal = NSMakePoint(bar.origin.x - frame.origin.x, bar.origin.y - frame.origin.y);
-	if ([view menuOpen]) menuLocal = NSMakePoint(menu.origin.x - frame.origin.x, menu.origin.y - frame.origin.y);
-
 	if (!NSEqualRects(frame, [window frame])) {
 		[window setFrame: frame display: NO];
 		[view setFrame: NSMakeRect(0, 0, frame.size.width, frame.size.height)];
 	}
-	[view setBarOrigin: barLocal menuOrigin: menuLocal];
+	[view setBarOrigin: NSMakePoint(0, 0)];	/* the window is exactly the bar: menus have their own windows */
 
 	r = [view barRect];	/* shape rects are in X coordinates: origin at the window's top left */
 	[shape addObject: [NSValue valueWithRect: NSMakeRect(r.origin.x, frame.size.height - NSMaxY(r), r.size.width, r.size.height)]];
-	if ([view menuOpen]) {
-		r = [view menuRect];
-		[shape addObject: [NSValue valueWithRect: NSMakeRect(r.origin.x, frame.size.height - NSMaxY(r), r.size.width, r.size.height)]];
-	}
 	{	/* the wallpaper under the bar, re-read when the bar moves or the wallpaper changes */
 		NSRect xbar = NSMakeRect(bar.origin.x, scr.size.height - NSMaxY(bar), bar.size.width, bar.size.height);
 		if (!NSEqualRects(xbar, backdropRect)) {

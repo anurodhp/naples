@@ -3,9 +3,11 @@
  * drawn by this view (the window grows downward while a menu is open; see NaplesBar). */
 #import <AppKit/AppKit.h>
 
-@class NaplesBar;
+@class NaplesBar, NaplesPanelSet;
+#import "NaplesPanel.h"
 
-@interface NaplesBarView : NSView {
+@interface NaplesBarView : NSView <NaplesPanelDelegate> {
+	NaplesPanelSet *panelSet;
 	NaplesBar *bar;
 	NSMutableArray *titleRects;	/* NSValue, top-down y, parallel to titleIdx */
 	NSMutableArray *titleIdx;	/* NSNumber: index into the menu's items */

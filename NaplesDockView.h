@@ -4,8 +4,10 @@
  * drawn by this view, as in Milan). */
 #import <AppKit/AppKit.h>
 #import "NaplesDock.h"
+#import "NaplesPanel.h"
 
-@interface NaplesDockView : NSView {
+@interface NaplesDockView : NSView <NaplesPanelDelegate> {
+	NaplesPanelSet *panelSet;
 	NaplesDock *dock;
 	NSArray *items;
 	NSMutableArray *slots;	/* NSValue rects in bar coordinates, parallel to items */
@@ -15,10 +17,6 @@
 	NSPoint barOrigin;	/* the bar's lower left corner in view coordinates */
 	/* long-click menu */
 	NSArray *menuEntries;
-	NSSize menuSize;
-	NSRect menuAnchor;	/* slot of the item the menu belongs to, bar coordinates (zero for the background) */
-	NSPoint menuPointer;	/* where the background menu was asked for, bar coordinates */
-	NSPoint menuOrigin;
 	NSInteger menuHover;
 	/* mouse state */
 	NSInteger downIndex;	/* item under the button, -1 for the bar, -2 for outside the bar */
@@ -38,12 +36,8 @@
 - (id) initWithDock: (NaplesDock *)d;
 - (void) reloadItems: (NSArray *)newItems edge: (int)e maxLength: (CGFloat)maxLen;
 - (NSSize) barSize;
-- (void) setBarOrigin: (NSPoint)bar menuOrigin: (NSPoint)menu;
+- (void) setBarOrigin: (NSPoint)bar;
 - (BOOL) menuOpen;
-- (NSSize) menuSize;
-- (NSRect) menuAnchor;
-- (NSPoint) menuPointer;
-- (NSRect) menuRect;	/* in view coordinates */
 - (NSRect) barRect;	/* in view coordinates */
 - (void) openMenuWithEntries: (NSArray *)entries anchor: (NSRect)slot pointer: (NSPoint)p;
 - (void) closeMenu;

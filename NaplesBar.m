@@ -3,6 +3,7 @@
 #import "NaplesDock.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
+#include <sys/sysctl.h>
 
 NSString *const NaplesMenuServerName = @"org.gnustep.Gershwin.MenuServer";
 NSString *const NaplesMenuClientPrefix = @"org.gnustep.Gershwin.MenuClient.";
@@ -119,6 +120,9 @@ localSeparator(void)
 		NSLog(@"Naples: could not register %@ (another menu server running?)", NaplesMenuServerName);
 
 	[[NaplesX shared] setPidResolver: ^int(unsigned long xid) { return [self pidForWindowId: windowKey(xid)]; }];
+	/* apps that were running when Naples (re)started hold a dead connection to the old server and only notice at their next
+	 * push: ask every GNUstep process for its menu now, which makes Eau reconnect to us */
+	[self performSelector: @selector(nudgeClients) withObject: nil afterDelay: 1.0];
 	[[NaplesX shared] setActiveHandler: ^{ [self activeWindowChanged]; }];
 	[[NaplesX shared] addBackgroundHandler: ^{ [self refreshBackdrop]; }];
 	[self activeWindowChanged];
@@ -147,26 +151,14 @@ localSeparator(void)
 
 - (void) viewResized
 {
+	/* the bar window is a fixed strip; menus have their own windows */
 	NSRect scr = [[NSScreen mainScreen] frame];
-	CGFloat h = [view desiredHeight];
-	NSRect frame = NSMakeRect(scr.origin.x, NSMaxY(scr) - h, scr.size.width, h);
+	NSRect frame = NSMakeRect(scr.origin.x, NSMaxY(scr) - [view barHeight], scr.size.width, [view barHeight]);
 	if (!NSEqualRects(frame, [window frame])) {
 		[window setFrame: frame display: NO];
-		[view setFrame: NSMakeRect(0, 0, frame.size.width, h)];
+		[view setFrame: NSMakeRect(0, 0, frame.size.width, frame.size.height)];
 	}
-	[self applyShape];
-	/* the server (or GNUstep) can drop the shape when the window is resized: apply it again once the resize has settled */
-	[NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(applyShape) object: nil];
-	[self performSelector: @selector(applyShape) withObject: nil afterDelay: 0.15];
 	[view setNeedsDisplay: YES];
-}
-
-- (void) applyShape
-{
-	if (debugOn()) NSLog(@"Naples bar: shape %@ window frame %@ xid 0x%lx", [view shapeRects], NSStringFromRect([window frame]),
-	                     (unsigned long)[GSCurrentServer() windowDevice: [window windowNumber]]);
-	[[NaplesX shared] setShape: (unsigned long)[GSCurrentServer() windowDevice: [window windowNumber]]
-	                     rects: [view shapeRects] radius: 5 square: 1];
 }
 
 /* ---- which application is in front ---- */
@@ -250,6 +242,25 @@ pidOfClient(NSString *client)
 		} @catch (NSException *e) { proxy = nil; }
 	}
 	return proxy;
+}
+
+- (void) nudgeClients
+{
+	int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+	size_t len = 0;
+	struct kinfo_proc *procs;
+	size_t i, n;
+	if (sysctl(mib, 4, NULL, &len, NULL, 0) < 0 || !len) return;
+	procs = malloc(len);
+	if (sysctl(mib, 4, procs, &len, NULL, 0) == 0) {
+		n = len / sizeof *procs;
+		for (i = 0; i < n; i++) {
+			pid_t pid = procs[i].kp_proc.p_pid;
+			if (pid <= 1 || pid == getpid()) continue;
+			[self requestMenuFromClient: [NSString stringWithFormat: @"%@%d", NaplesMenuClientPrefix, pid]];
+		}
+	}
+	free(procs);
 }
 
 - (void) requestMenuFromClient: (NSString *)name

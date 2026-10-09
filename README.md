@@ -27,10 +27,13 @@ It is the server end of the Eau theme's menu protocol (Distributed Objects, `org
 `NaplesMenuProtocol.h`, identical to Eau.h). Each app running Eau pushes its menu here and hides its own menu bar; Naples
 shows the menu of the app whose window is `_NET_ACTIVE_WINDOW` (via `_NET_WM_PID` -> `MenuClient.<pid>`), refreshes
 enabled/checked state with `validateMenuStateForWindow:` right before a menu opens, and sends the chosen item back as an
-index path. Drop-downs and cascades are overlays in the bar window, which grows downward while a menu is open.
+index path. Drop-downs and cascades are small borderless windows of their own (`NaplesPanel`), one per level, sized exactly to the
+menu; growing the bar window to hold them left its unused part painted black on this server. The dock's long-click menu
+uses the same panels.
 
 Start Naples before the other apps (the session autostart): Eau looks the server up when it starts and retries every
-30 s. Apps that are not GNUstep/Eau show just their name. The Hexley art is (c) 2000 Jon Hooper, all rights reserved,
+30 s. An app that outlives a Naples restart keeps a dead connection until its next push, so Naples asks every process for
+its menu one second after it starts (`requestApplicationMenuUpdate`), which makes Eau reconnect. Apps that are not GNUstep/Eau show just their name. The Hexley art is (c) 2000 Jon Hooper, all rights reserved,
 bundled under its own licence as in Milan (`../milan/icons/app/README.md`), not under the MIT licence.
 
 ## How the pieces use XNU / GCD

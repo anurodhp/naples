@@ -75,5 +75,4 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 /* Geometry hooks used by the view. */
 - (void) holdLayout: (BOOL)hold;	/* defer relayout (window moves, resizes, reshapes) until released */
 - (void) relayout;	/* re-measure the view and move/resize/shape the window */
-- (void) menuChanged;	/* the view opened or closed its menu overlay: the window must grow or shrink */
 @end
