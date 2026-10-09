@@ -111,7 +111,7 @@ executableOfPid(int pid)
 	} else {	/* first run: whatever is installed, so the dock is not empty */
 		NSString *f;
 		for (f in [[[NSFileManager defaultManager] contentsOfDirectoryAtPath: @"/Applications" error: NULL] sortedArrayUsingSelector: @selector(compare:)])
-			if ([[f pathExtension] isEqualToString: @"app"] && ![f isEqualToString: @"Milan.app"] && [pinned count] < 8)
+			if ([[f pathExtension] isEqualToString: @"app"] && ![f isEqualToString: @"Milan.app"] && ![f isEqualToString: @"Naples.app"] && [pinned count] < 8)
 				[pinned addObject: [@"/Applications" stringByAppendingPathComponent: f]];
 		[self savePinned];
 	}

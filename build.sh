@@ -10,16 +10,9 @@ set -euo pipefail
 NAPLES_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 IOKIT_DIR="${IOKIT_DIR:-$NAPLES_DIR/../iokit}"
 STAGING="$IOKIT_DIR/tools/userland_staging"
-[ -f "$STAGING/gnustep_common.sh" ] || { echo "error: $STAGING/gnustep_common.sh not found; set IOKIT_DIR" >&2; exit 1; }
+[ -x "$STAGING/build_naples.sh" ] || { echo "error: $STAGING/build_naples.sh not found; set IOKIT_DIR" >&2; exit 1; }
 
-# Same recipe as build_milan.sh (gs_build_app), plus the X11 libraries Naples talks to directly.
-(
-    cd "$STAGING"
-    . ./gnustep_common.sh
-    GS_APP_LIBS=("$SYS/libX11.dylib" "$SYS/libXext.dylib" "$SYS/libxcb.dylib" "$SYS/libXau.dylib" "$SYS/libXdmcp.dylib")
-    GS_APP_CPPFLAGS="-I$OUT/x11/include"
-    gs_build_app Naples "$NAPLES_DIR"
-)
+NAPLES_SRC="$NAPLES_DIR" "$STAGING/build_naples.sh"
 
 [ "${1:-}" = deploy ] || exit 0
 HOST="${DEPLOY_HOST:-root@10.0.0.142}"
