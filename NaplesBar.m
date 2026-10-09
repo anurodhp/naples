@@ -1,9 +1,11 @@
 #import "NaplesBar.h"
 #import "NaplesBarView.h"
 #import "NaplesDock.h"
+#import "NaplesPanel.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
 #include <sys/sysctl.h>
+#include <signal.h>
 
 NSString *const NaplesMenuServerName = @"org.gnustep.Gershwin.MenuServer";
 NSString *const NaplesMenuClientPrefix = @"org.gnustep.Gershwin.MenuClient.";
@@ -310,6 +312,49 @@ pidOfClient(NSString *client)
 	[NSApp orderFrontStandardAboutPanelWithOptions: opts];
 }
 
+/* ---- Log Out, Restart, Shut Down ---- */
+
+/* Asks first. A log out ends the window manager (and with it the session); Restart and Shut Down also leave a request in the
+ * home folder, which the session script (iokit's gsdm Xsession) turns into the exit status gsdm acts on (10 restart, 11
+ * shut down). Open applications are asked to close their windows first. */
+- (void) askPower: (int)kind
+{
+	NSString *titles[3] = { @"Log Out", @"Restart", @"Shut Down" };
+	NSString *what[3] = { @"log out", @"restart", @"shut down" };
+	NSString *msg = [NSString stringWithFormat: @"Are you sure you want to %@ now? Open applications will be asked to close.", what[kind]];
+	[NaplesConfirm askTitle: [titles[kind] stringByAppendingString: @"?"] message: msg confirm: titles[kind] then: ^{ [self performPower: kind]; }];
+}
+
+- (void) performPower: (int)kind
+{
+	NaplesWindowInfo *w;
+	if (kind != NaplesPowerLogOut) {
+		NSString *file = [NSHomeDirectory() stringByAppendingPathComponent: @".session-request"];
+		[(kind == NaplesPowerRestart ? @"restart\n" : @"shutdown\n") writeToFile: file atomically: YES encoding: NSUTF8StringEncoding error: NULL];
+	}
+	for (w in [[NaplesX shared] clientWindows]) [[NaplesX shared] closeWindow: w->xid];	/* let applications save and quit */
+	[self performSelector: @selector(endSession) withObject: nil afterDelay: 2.5];
+}
+
+/* the window manager is the session: ending it ends the login (SIGTERM is its "exit", Window Maker saves its state) */
+- (void) endSession
+{
+	int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+	size_t len = 0, i, n;
+	struct kinfo_proc *procs;
+	if (sysctl(mib, 4, NULL, &len, NULL, 0) < 0 || !len) return;
+	procs = malloc(len);
+	if (sysctl(mib, 4, procs, &len, NULL, 0) == 0) {
+		n = len / sizeof *procs;
+		for (i = 0; i < n; i++) {
+			pid_t pid = procs[i].kp_proc.p_pid;
+			if (procs[i].kp_eproc.e_ucred.cr_uid != getuid() || pid <= 1) continue;
+			if ([[NaplesExecutableOfPid(pid) lastPathComponent] isEqualToString: @"wmaker"]) kill(pid, SIGTERM);
+		}
+	}
+	free(procs);
+}
+
 - (NSDictionary *) systemMenu
 {
 	NSMutableArray *items = [NSMutableArray array];
@@ -323,6 +368,10 @@ pidOfClient(NSString *client)
 		[items addObject: localItem([names objectAtIndex: e], e != [dock edge], ^{ [dock setEdge: e persist: YES]; })];
 	[items addObject: localSeparator()];
 	[items addObject: localItem(@"Quit Naples", YES, ^{ [NSApp terminate: nil]; })];
+	[items addObject: localSeparator()];
+	[items addObject: localItem(@"Log Out\u2026", YES, ^{ [self askPower: NaplesPowerLogOut]; })];
+	[items addObject: localItem(@"Restart\u2026", YES, ^{ [self askPower: NaplesPowerRestart]; })];
+	[items addObject: localItem(@"Shut Down\u2026", YES, ^{ [self askPower: NaplesPowerShutDown]; })];
 	return [NSDictionary dictionaryWithObjectsAndKeys: @"Naples", @"title", items, @"items", nil];
 }
 

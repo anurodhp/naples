@@ -7,6 +7,8 @@
 
 @class NaplesDock, NaplesBarView;
 
+enum { NaplesPowerLogOut = 0, NaplesPowerRestart = 1, NaplesPowerShutDown = 2 };
+
 @interface NaplesBar : NSObject <GSGNUstepMenuServer> {
 	NaplesDock *dock;
 	NSWindow *window;
@@ -27,6 +29,7 @@
 /* for the view */
 - (NSDictionary *) menuData;	/* the frontmost application's menu, nil if it has none */
 - (NSString *) frontName;
+- (void) askPower: (int)kind;	/* confirm, then log out / restart / shut down */
 - (void) showAbout;	/* About Naples, the standard GNUstep info panel (as Milan's) */
 - (NSDictionary *) systemMenu;	/* the Hexley menu; items carry a "block" */
 - (NSImage *) hexley;

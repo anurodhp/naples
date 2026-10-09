@@ -302,3 +302,116 @@ NaplesDrawCheck(NSRect r, NSInteger state, BOOL selected, NaplesPanelStyle style
 }
 
 @end
+
+
+/* ---- confirmation panel ---- */
+
+@interface NaplesConfirmView : NSView {
+	NSString *title, *message, *button;
+	void (^action)(void);
+	int pressed;	/* 0 none, 1 cancel, 2 confirm */
+}
+- (id) initWithTitle: (NSString *)t message: (NSString *)m confirm: (NSString *)b action: (void (^)(void))a;
+@end
+
+static NaplesPanelWindow *confirmWindow;
+
+@implementation NaplesConfirmView
+
+- (id) initWithTitle: (NSString *)t message: (NSString *)m confirm: (NSString *)b action: (void (^)(void))a
+{
+	if ((self = [super initWithFrame: NSMakeRect(0, 0, 360, 140)])) {
+		title = [t copy]; message = [m copy]; button = [b copy]; action = Block_copy(a);
+	}
+	return self;
+}
+
+- (void) dealloc { [title release]; [message release]; [button release]; if (action) Block_release(action); [super dealloc]; }
+- (BOOL) isFlipped { return NO; }
+- (BOOL) isOpaque { return NO; }
+- (BOOL) acceptsFirstMouse: (NSEvent *)e { return YES; }
+
+- (NSRect) cancelRect { return NSMakeRect(360 - 20 - 90 - 10 - 100, 16, 100, 26); }
+- (NSRect) confirmRect { return NSMakeRect(360 - 20 - 90, 16, 90, 26); }
+
+- (void) drawButton: (NSRect)r label: (NSString *)l primary: (BOOL)primary down: (BOOL)down
+{
+	NSDictionary *a = [NSDictionary dictionaryWithObjectsAndKeys: [NSFont systemFontOfSize: 12], NSFontAttributeName,
+	                   primary ? [NSColor whiteColor] : [NSColor blackColor], NSForegroundColorAttributeName, nil];
+	NSSize sz = [l sizeWithAttributes: a];
+	NSBezierPath *p = [NSBezierPath bezierPathWithRoundedRect: r xRadius: 5 yRadius: 5];
+	if (primary) [[NSColor colorWithCalibratedRed: down ? 0.15 : 0.2 green: down ? 0.35 : 0.45 blue: down ? 0.7 : 0.85 alpha: 1] set];
+	else [[NSColor colorWithCalibratedWhite: down ? 0.78 : 0.92 alpha: 1] set];
+	[p fill];
+	[[NSColor colorWithCalibratedWhite: 0 alpha: 0.35] set];
+	[p stroke];
+	[l drawAtPoint: NSMakePoint(NSMidX(r) - sz.width / 2, NSMidY(r) - sz.height / 2) withAttributes: a];
+}
+
+- (void) drawRect: (NSRect)dirty
+{
+	NSRect b = [self bounds];
+	NSBezierPath *outline = [NSBezierPath bezierPathWithRoundedRect: b xRadius: 8 yRadius: 8];
+	NSDictionary *ta = [NSDictionary dictionaryWithObjectsAndKeys: [NSFont boldSystemFontOfSize: 14], NSFontAttributeName,
+	                    [NSColor blackColor], NSForegroundColorAttributeName, nil];
+	NSDictionary *ma = [NSDictionary dictionaryWithObjectsAndKeys: [NSFont systemFontOfSize: 12], NSFontAttributeName,
+	                    [NSColor colorWithCalibratedWhite: 0.15 alpha: 1], NSForegroundColorAttributeName, nil];
+	NSRectFillUsingOperation(dirty, NSCompositeClear);
+	[[NSColor colorWithCalibratedWhite: 0.96 alpha: 1] set];
+	[outline fill];
+	[[NSColor colorWithCalibratedWhite: 0 alpha: 0.4] set];
+	[[NSBezierPath bezierPathWithRoundedRect: NSInsetRect(b, 0.5, 0.5) xRadius: 8 yRadius: 8] stroke];
+	[title drawAtPoint: NSMakePoint(20, b.size.height - 38) withAttributes: ta];
+	[message drawInRect: NSMakeRect(20, 56, b.size.width - 40, b.size.height - 100) withAttributes: ma];
+	[self drawButton: [self cancelRect] label: @"Cancel" primary: NO down: pressed == 1];
+	[self drawButton: [self confirmRect] label: button primary: YES down: pressed == 2];
+}
+
+- (void) mouseDown: (NSEvent *)e
+{
+	NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
+	pressed = NSPointInRect(p, [self cancelRect]) ? 1 : NSPointInRect(p, [self confirmRect]) ? 2 : 0;
+	[self setNeedsDisplay: YES];
+}
+
+- (void) mouseUp: (NSEvent *)e
+{
+	NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
+	int was = pressed;
+	void (^run)(void) = nil;
+	pressed = 0;
+	if (was == 1 && NSPointInRect(p, [self cancelRect])) [[self window] orderOut: nil];
+	else if (was == 2 && NSPointInRect(p, [self confirmRect])) {
+		run = [[action copy] autorelease];
+		[[self window] orderOut: nil];
+		if (run) run();
+	}
+	[self setNeedsDisplay: YES];
+}
+
+@end
+
+@implementation NaplesConfirm
+
++ (void) askTitle: (NSString *)title message: (NSString *)message confirm: (NSString *)button then: (void (^)(void))action
+{
+	NSRect scr = [[NSScreen mainScreen] frame], f = NSMakeRect(NSMidX(scr) - 180, NSMidY(scr) - 70, 360, 140);
+	NaplesConfirmView *v = [[[NaplesConfirmView alloc] initWithTitle: title message: message confirm: button action: action] autorelease];
+	if (confirmWindow) [confirmWindow orderOut: nil];
+	if (!confirmWindow) {
+		confirmWindow = [[NaplesPanelWindow alloc] initWithContentRect: f styleMask: NSBorderlessWindowMask backing: NSBackingStoreBuffered defer: NO];
+		[confirmWindow setLevel: NSStatusWindowLevel];
+		[confirmWindow setOpaque: NO];
+		[confirmWindow setBackgroundColor: [NSColor clearColor]];
+		[confirmWindow setHasShadow: NO];
+		[confirmWindow setReleasedWhenClosed: NO];
+		[confirmWindow setCanHide: NO];
+		[[NaplesX shared] registerOwnWindow: (unsigned long)[GSCurrentServer() windowDevice: [confirmWindow windowNumber]]];
+	}
+	[confirmWindow setContentView: v];
+	[confirmWindow setFrame: f display: NO];
+	[confirmWindow orderFrontRegardless];
+	[confirmWindow display];
+}
+
+@end

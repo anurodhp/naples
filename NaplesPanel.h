@@ -48,3 +48,9 @@ void NaplesDrawCheck(NSRect r, NSInteger state, BOOL selected, NaplesPanelStyle 
 - (BOOL) isShowing;
 - (NSArray *) panels;
 @end
+
+/* A small confirmation panel in the middle of the screen (NSRunAlertPanel never appears on this stack): title, message, a
+ * Cancel button and a confirming one. Not modal; clicking either button closes it, and the confirming one runs the block. */
+@interface NaplesConfirm : NSObject
++ (void) askTitle: (NSString *)title message: (NSString *)message confirm: (NSString *)button then: (void (^)(void))action;
+@end
