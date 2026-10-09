@@ -470,16 +470,19 @@ edgeForPoint(NSPoint p)
 
 - (NSDragOperation) draggingSourceOperationMaskForLocal: (BOOL)isLocal { return NSDragOperationMove; }
 
-- (void) finishDrag: (NSPoint)screenPoint operation: (NSDragOperation)op
+- (void) finishDrag: (NSPoint)ignored operation: (NSDragOperation)op
 {
 	NaplesItem *it = (dragging && dragSource < (NSInteger)[items count]) ? [items objectAtIndex: dragSource] : nil;
-	NSRect bar = [self barRect];
-	NSRect winBar = NSMakeRect([[self window] frame].origin.x + bar.origin.x, [[self window] frame].origin.y + bar.origin.y,
-	                           bar.size.width, bar.size.height);
-	dragging = NO; dropIndex = dropAppIndex = -1; dropOnTrash = NO;
+	NSRect bar = [self barRect], wf = [[self window] frame];
+	NSRect winBar = NSMakeRect(wf.origin.x + bar.origin.x, wf.origin.y + bar.origin.y, bar.size.width, bar.size.height);
+	/* the pointer, not the point GNUstep passes (that is the drag image's corner, up to an icon away) */
+	NSPoint pointer = [NSEvent mouseLocation];
+	BOOL handled = dropHandled;
+	dragging = NO; dropIndex = dropAppIndex = -1; dropOnTrash = NO; dropHandled = NO;
 	downIndex = -2;
-	/* let go outside the dock: the app leaves the dock (a running program stays as a running item) */
-	if (it && it->pinned && op == NSDragOperationNone && !NSPointInRect(screenPoint, winBar))
+	/* let go outside the dock, and nothing in the dock took the drop: the app leaves the dock (a running program stays
+	 * as a running item). The operation GNUstep reports is not used: it is None or stale depending on the last target. */
+	if (it && it->pinned && !handled && !NSPointInRect(pointer, NSInsetRect(winBar, -6, -6)))
 		[dock unpinPath: it->path];
 	[self setNeedsDisplay: YES];
 }
@@ -537,6 +540,7 @@ done:
 	dropIndex = dropAppIndex = -1; dropOnTrash = NO;
 	[self setNeedsDisplay: YES];
 	if (op == NSDragOperationNone) return NO;
+	dropHandled = YES;
 	if (trash) {
 		if (internal) [dock unpinPath: [files objectAtIndex: 0]];
 		else [dock trashPaths: files];

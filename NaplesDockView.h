@@ -28,7 +28,7 @@
 	NSInteger dragSource;
 	NSInteger dropIndex;	/* pinned insertion index while something is dragged over the dock, else -1 */
 	NSInteger dropAppIndex;	/* an app icon a document is dragged onto (opens it with that app), else -1 */
-	BOOL dropOnTrash;
+	BOOL dropOnTrash, dropHandled;
 	NSTrackingRectTag trackTag;
 	BOOL tracking;
 	NSImage *backdrop;	/* the wallpaper under the bar (pseudo-transparency), nil if unknown */
