@@ -21,13 +21,19 @@
 - (BOOL) connect;
 /* Called (on the main thread, once per burst) when the window list or any window's state/title changed. */
 - (void) setChangeHandler: (void (^)(void))handler;
+- (NaplesWindowInfo *) infoForWindow: (unsigned long)xid;	/* any window, no filtering; nil if it is gone */
+- (NaplesWindowInfo *) activeWindow;	/* _NET_ACTIVE_WINDOW, nil if none */
+/* Called (main thread) when _NET_ACTIVE_WINDOW changes. */
+- (void) setActiveHandler: (void (^)(void))handler;
 - (NSArray *) clientWindows;	/* NaplesWindowInfo, in _NET_CLIENT_LIST (map) order, Naples' own windows left out */
 - (void) activateWindow: (unsigned long)xid;	/* also un-minimizes */
 - (void) closeWindow: (unsigned long)xid;
-/* Hints for Naples' window; call before it is mapped. thickness/length are the bar in screen pixels, top-left origin. */
+/* Hints for Naples' window; call before it is mapped. edge: 0 bottom, 1 left, 2 right, 3 top; barRect is the bar in screen pixels, top-left origin. */
 - (void) setDockHints: (unsigned long)xid edge: (int)edge barRect: (NSRect)bar reserve: (BOOL)reserve opacity: (double)opacity;
-/* XShape bounding mask: union of rects (window coordinates, top-left origin), each with rounded corners. */
+/* XShape bounding mask: union of rects (window coordinates, top-left origin), each with rounded corners;
+ * the first `square` rects are left square (the top bar). */
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius;
+- (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius square: (NSUInteger)square;
 - (BOOL) hasCompositor;
 @end
 

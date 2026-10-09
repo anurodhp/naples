@@ -43,6 +43,7 @@ ignoreXError(Display *d, XErrorEvent *e)
 	Window root;
 	dispatch_source_t readSource;
 	void (^changeHandler)(void);
+	void (^activeHandler)(void);
 	NSMutableSet *selected;	/* windows we already listen to */
 	struct {
 		Atom clientList, wmState, netWmState, name, netName, utf8, pid, windowType, typeNormal, typeDialog,
@@ -97,21 +98,29 @@ ignoreXError(Display *d, XErrorEvent *e)
 	changeHandler = h ? Block_copy(h) : nil;
 }
 
+- (void) setActiveHandler: (void (^)(void))h
+{
+	Block_release(activeHandler);
+	activeHandler = h ? Block_copy(h) : nil;
+}
+
 - (void) drain
 {
-	BOOL changed = NO;
+	BOOL changed = NO, activeChanged = NO;
 	XEvent ev;
 	while (XPending(dpy)) {
 		XNextEvent(dpy, &ev);
 		if (ev.type != PropertyNotify) continue;
 		if (ev.xproperty.window == root) {
 			if (ev.xproperty.atom == a.clientList) changed = YES;
+			if (ev.xproperty.atom == a.activeWindow) activeChanged = YES;
 		} else if (ev.xproperty.atom == a.wmState || ev.xproperty.atom == a.netWmState ||
 		           ev.xproperty.atom == a.name || ev.xproperty.atom == a.netName || ev.xproperty.atom == a.pid) {
 			changed = YES;
 		}
 	}
 	if (changed && changeHandler) changeHandler();
+	if (activeChanged && activeHandler) activeHandler();
 }
 
 /* ---- properties ---- */
@@ -155,6 +164,39 @@ ignoreXError(Display *d, XErrorEvent *e)
 	return ok;
 }
 
+- (NaplesWindowInfo *) infoForWindow: (unsigned long)xid
+{
+	Window w = xid;
+	NaplesWindowInfo *info;
+	unsigned long m, *v;
+	XClassHint ch = { NULL, NULL };
+	Window owner = None;
+	XWindowAttributes attr;
+	if (!dpy || !w || !XGetWindowAttributes(dpy, w, &attr)) return nil;
+	info = [[[NaplesWindowInfo alloc] init] autorelease];
+	info->xid = w;
+	if ((v = [self longs: a.pid of: w type: XA_CARDINAL count: &m])) { info->pid = (int)v[0]; XFree(v); }
+	if ((v = [self longs: a.wmState of: w type: AnyPropertyType count: &m])) { info->minimized = (v[0] == IconicState); XFree(v); }
+	info->title = [[self text: a.netName of: w] retain];
+	if (!info->title) info->title = [[self text: a.name of: w] retain];
+	if (XGetClassHint(dpy, w, &ch)) {
+		if (ch.res_name) info->wmClass = [[NSString stringWithUTF8String: ch.res_name] retain];
+		XFree(ch.res_name); XFree(ch.res_class);
+	}
+	if (XGetTransientForHint(dpy, w, &owner) && owner != None) info->transient = YES;
+	return info;
+}
+
+- (NaplesWindowInfo *) activeWindow
+{
+	unsigned long n, *v;
+	Window w;
+	if (!dpy || !(v = [self longs: a.activeWindow of: root type: XA_WINDOW count: &n])) return nil;
+	w = v[0];
+	XFree(v);
+	return w ? [self infoForWindow: w] : nil;
+}
+
 - (NSArray *) clientWindows
 {
 	NSMutableArray *out = [NSMutableArray array];
@@ -164,26 +206,13 @@ ignoreXError(Display *d, XErrorEvent *e)
 	for (i = 0; list && i < n; i++) {
 		Window w = list[i];
 		NaplesWindowInfo *info;
-		unsigned long m, *v;
-		XClassHint ch = { NULL, NULL };
-		Window owner = None;
 		if (![selected containsObject: [NSNumber numberWithUnsignedLong: w]]) {
 			XSelectInput(dpy, w, PropertyChangeMask);
 			[selected addObject: [NSNumber numberWithUnsignedLong: w]];
 		}
 		if (![self wantsWindow: w]) continue;
-		info = [[[NaplesWindowInfo alloc] init] autorelease];
-		info->xid = w;
-		if ((v = [self longs: a.pid of: w type: XA_CARDINAL count: &m])) { info->pid = (int)v[0]; XFree(v); }
-		if (info->pid == getpid()) continue;
-		if ((v = [self longs: a.wmState of: w type: AnyPropertyType count: &m])) { info->minimized = (v[0] == IconicState); XFree(v); }
-		info->title = [[self text: a.netName of: w] retain];
-		if (!info->title) info->title = [[self text: a.name of: w] retain];
-		if (XGetClassHint(dpy, w, &ch)) {
-			if (ch.res_name) info->wmClass = [[NSString stringWithUTF8String: ch.res_name] retain];
-			XFree(ch.res_name); XFree(ch.res_class);
-		}
-		if (XGetTransientForHint(dpy, w, &owner) && owner != None) info->transient = YES;
+		info = [self infoForWindow: w];
+		if (!info || info->pid == getpid()) continue;
 		[out addObject: info];
 	}
 	if (list) XFree(list);
@@ -240,7 +269,8 @@ ignoreXError(Display *d, XErrorEvent *e)
 		XChangeProperty(dpy, w, a.opacity, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&o, 1);
 	}
 	if (reserve) {	/* left, right, top, bottom, then the start/end of each strip */
-		if (edge == 1) { strut[0] = bar.size.width + bar.origin.x; strut[4] = bar.origin.y; strut[5] = bar.origin.y + bar.size.height; }
+		if (edge == 3) { strut[2] = bar.origin.y + bar.size.height; strut[8] = bar.origin.x; strut[9] = bar.origin.x + bar.size.width; }
+		else if (edge == 1) { strut[0] = bar.size.width + bar.origin.x; strut[4] = bar.origin.y; strut[5] = bar.origin.y + bar.size.height; }
 		else if (edge == 2) { strut[1] = sw - bar.origin.x; strut[6] = bar.origin.y; strut[7] = bar.origin.y + bar.size.height; }
 		else { strut[3] = sh - bar.origin.y; strut[10] = bar.origin.x; strut[11] = bar.origin.x + bar.size.width; }
 	}
@@ -251,10 +281,17 @@ ignoreXError(Display *d, XErrorEvent *e)
 
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)r
 {
+	[self setShape: xid rects: rects radius: r square: 0];
+}
+
+- (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius square: (NSUInteger)square
+{
 	NSMutableData *buf = [NSMutableData data];
 	NSValue *v;
+	NSUInteger k = 0;
 	if (!dpy || !xid) return;
 	for (v in rects) {
+		int r = k++ < square ? 0 : radius;
 		NSRect f = [v rectValue];
 		int x = (int)f.origin.x, y = (int)f.origin.y, w = (int)f.size.width, h = (int)f.size.height, i, run = 0, runInset = -1;
 		for (i = 0; i <= h; i++) {

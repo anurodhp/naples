@@ -422,6 +422,11 @@ executableOfPid(int pid)
 	}
 }
 
+- (void) openMilan
+{
+	if ([items count]) [self activateItem: [items objectAtIndex: 0]];
+}
+
 - (void) openFile: (NSString *)file withItem: (NaplesItem *)item
 {
 	if (item->path) [self launch: item->path file: file arguments: nil];

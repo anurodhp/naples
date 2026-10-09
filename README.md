@@ -17,8 +17,25 @@ Pure AppKit + Xlib + libdispatch; no extra libraries beyond the X11 ones the sta
   translucent and `_NET_WM_WINDOW_OPACITY` is set, so real see-through needs an alpha-capable window or a compositor.
 - Reserves its strip with `_NET_WM_STRUT_PARTIAL` so maximized windows stop at the dock (`NaplesReserveSpace NO` to disable).
 
+## Menu bar
+
+A second window across the top (`NaplesBar`): a **Hexley head** at the far left (opens a system menu: Open Milan, dock
+position, Quit Naples), the **frontmost app's menu titles** after it, and the **date and time** at the far right. It
+reserves its strip with a strut. Disable with `-NaplesBar NO`.
+
+It is the server end of the Eau theme's menu protocol (Distributed Objects, `org.gnustep.Gershwin.MenuServer`, see
+`NaplesMenuProtocol.h`, identical to Eau.h). Each app running Eau pushes its menu here and hides its own menu bar; Naples
+shows the menu of the app whose window is `_NET_ACTIVE_WINDOW` (via `_NET_WM_PID` -> `MenuClient.<pid>`), refreshes
+enabled/checked state with `validateMenuStateForWindow:` right before a menu opens, and sends the chosen item back as an
+index path. Drop-downs and cascades are overlays in the bar window, which grows downward while a menu is open.
+
+Start Naples before the other apps (the session autostart): Eau looks the server up when it starts and retries every
+30 s. Apps that are not GNUstep/Eau show just their name. The Hexley art is (c) 2000 Jon Hooper, all rights reserved,
+bundled under its own licence as in Milan (`../milan/icons/app/README.md`), not under the MIT licence.
+
 ## How the pieces use XNU / GCD
 
+- The clock redraws on a wall-clock-aligned `DISPATCH_SOURCE_TYPE_TIMER`.
 - Running state: `_NET_CLIENT_LIST` + `WM_STATE` via a GCD read source on the X connection; a window's process and bundle
   come from `sysctl(KERN_PROCARGS2)`.
 - Children Naples starts are watched with `DISPATCH_SOURCE_TYPE_PROC` (kqueue `EVFILT_PROC`/`NOTE_EXIT`).

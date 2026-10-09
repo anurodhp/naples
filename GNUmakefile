@@ -3,8 +3,9 @@ include $(GNUSTEP_MAKEFILES)/common.make
 
 APP_NAME = Naples
 VERSION = 0.1
-Naples_OBJC_FILES = main.m NaplesX.m NaplesDock.m NaplesDockView.m
+Naples_OBJC_FILES = main.m NaplesX.m NaplesDock.m NaplesDockView.m NaplesBar.m NaplesBarView.m
 Naples_MAIN_MODEL_FILE =
+Naples_RESOURCE_FILES = icons/hexley_head.png
 Naples_LOCALIZED_RESOURCE_FILES =
 
 ADDITIONAL_OBJCFLAGS += -O2 -Wall -fblocks
