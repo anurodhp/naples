@@ -295,11 +295,28 @@ pidOfClient(NSString *client)
 
 /* ---- the Hexley menu ---- */
 
+/* the same panel Milan and Rome show: GNUstep's standard info panel, from the keys GSInfoPanel reads */
+- (void) showAbout
+{
+	NSString *ver = [[[NSBundle mainBundle] infoDictionary] objectForKey: @"ApplicationRelease"];
+	NSDictionary *opts = [NSDictionary dictionaryWithObjectsAndKeys:
+	    @"Naples", @"ApplicationName",
+	    @"A dock and global menu bar for GNUstep and Window Maker.", @"ApplicationDescription",
+	    [ver length] ? ver : @"0.2", @"ApplicationRelease",
+	    [NSArray arrayWithObject: @"Anurodh Pokharel"], @"Authors",
+	    @"Copyright \u00a9 2026 Anurodh Pokharel. MIT licence.", @"Copyright",
+	    @"Hexley DarwinOS Mascot Copyright 2000 by Jon Hooper. All Rights Reserved.", @"CopyrightDescription",
+	    nil];
+	[NSApp orderFrontStandardAboutPanelWithOptions: opts];
+}
+
 - (NSDictionary *) systemMenu
 {
 	NSMutableArray *items = [NSMutableArray array];
 	NSArray *names = [NSArray arrayWithObjects: @"Dock at Bottom", @"Dock on the Left", @"Dock on the Right", nil];
 	int e;
+	[items addObject: localItem(@"About Naples", YES, ^{ [self showAbout]; })];
+	[items addObject: localSeparator()];
 	[items addObject: localItem(@"Open Milan", YES, ^{ [dock openMilan]; })];
 	[items addObject: localSeparator()];
 	for (e = 0; e < 3; e++)

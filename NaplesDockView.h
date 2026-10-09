@@ -7,7 +7,8 @@
 #import "NaplesPanel.h"
 
 @interface NaplesDockView : NSView <NaplesPanelDelegate> {
-	NaplesPanelSet *panelSet;
+	NaplesPanelSet *panelSet, *tipSet;
+	NSInteger tipIndex;
 	NaplesDock *dock;
 	NSArray *items;
 	NSMutableArray *slots;	/* NSValue rects in bar coordinates, parallel to items */

@@ -24,7 +24,7 @@ draggable(NaplesItem *it)
 		dock = d;
 		slots = [[NSMutableArray alloc] init];
 		iconSize = 44;
-		downIndex = -2; dropIndex = -1; dropAppIndex = -1; menuHover = -1;
+		downIndex = -2; dropIndex = -1; dropAppIndex = -1; menuHover = -1; tipIndex = -2;
 		[self registerForDraggedTypes: [NSArray arrayWithObjects: NaplesPboardType, NSFilenamesPboardType, nil]];
 	}
 	return self;
@@ -39,7 +39,7 @@ draggable(NaplesItem *it)
 
 - (void) dealloc
 {
-	[backdrop release]; [items release]; [slots release]; [panelSet release]; [menuEntries release]; [downEvent release];
+	[backdrop release]; [items release]; [slots release]; [tipSet release]; [panelSet release]; [menuEntries release]; [downEvent release];
 	[super dealloc];
 }
 
@@ -56,6 +56,7 @@ draggable(NaplesItem *it)
 	NSInteger want = [[NSUserDefaults standardUserDefaults] integerForKey: @"NaplesIconSize"], total, i;
 	NaplesItem *it;
 	CGFloat pos;
+	[self hideTip];
 	[items release]; items = [newItems retain];
 	edge = e;
 	iconSize = want >= 24 && want <= 128 ? (int)want : 44;
@@ -112,21 +113,8 @@ draggable(NaplesItem *it)
 
 - (void) setBarOrigin: (NSPoint)bar
 {
-	NSInteger i;
 	barOrigin = bar;
-	[self removeAllToolTips];
-	for (i = 0; i < (NSInteger)[items count]; i++) {
-		NaplesItem *it = [items objectAtIndex: i];
-		if (it->kind != NaplesItemDivider)
-			[self addToolTipRect: [self slotRect: i] owner: self userData: (void *)(NSUInteger)i];
-	}
 	[self setNeedsDisplay: YES];
-}
-
-- (NSString *) view: (NSView *)v stringForToolTip: (NSToolTipTag)tag point: (NSPoint)p userData: (void *)ud
-{
-	NSUInteger i = (NSUInteger)ud;
-	return i < [items count] ? [dock toolTipForItem: [items objectAtIndex: i]] : nil;
 }
 
 /* index of the item under p (view coordinates); -1 the bar itself, -2 outside the bar */
@@ -313,14 +301,60 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 
 /* ---- the long-click menu: a panel window next to the item (NaplesPanel), actions run from the entries ---- */
 
+/* puts a panel next to a slot (or the pointer when the slot is zero), on the side away from the screen edge, inside the screen */
+- (void) place: (NaplesPanel *)panel besideSlot: (NSRect)slot pointer: (NSPoint)p gap: (CGFloat)gap
+{
+	NSRect scr = [[NSScreen mainScreen] frame], wf = [[self window] frame], bar, m;
+	NSPoint c;
+	int dockEdge = [dock edge];
+	bar = NSMakeRect(wf.origin.x + barOrigin.x, wf.origin.y + barOrigin.y, barSize.width, barSize.height);
+	c = NSEqualRects(slot, NSZeroRect) ? NSMakePoint(bar.origin.x + p.x, bar.origin.y + p.y) : NSMakePoint(NSMidX(slot) + bar.origin.x, NSMidY(slot) + bar.origin.y);
+	if (dockEdge == NaplesEdgeBottom) m = NSMakeRect(c.x - panel->w / 2, NSMaxY(bar) + gap, panel->w, panel->h);
+	else if (dockEdge == NaplesEdgeLeft) m = NSMakeRect(NSMaxX(bar) + gap, c.y - panel->h / 2, panel->w, panel->h);
+	else m = NSMakeRect(bar.origin.x - gap - panel->w, c.y - panel->h / 2, panel->w, panel->h);
+	if (NSMaxX(m) > NSMaxX(scr)) m.origin.x = NSMaxX(scr) - m.size.width;
+	if (NSMinX(m) < NSMinX(scr)) m.origin.x = NSMinX(scr);
+	if (NSMaxY(m) > NSMaxY(scr)) m.origin.y = NSMaxY(scr) - m.size.height;
+	if (NSMinY(m) < NSMinY(scr)) m.origin.y = NSMinY(scr);
+	panel->x = m.origin.x - scr.origin.x;
+	panel->top = NSMaxY(scr) - NSMaxY(m);
+}
+
+/* ---- the name tip: a small label panel after the pointer rests on an item ---- */
+
+- (void) hideTip
+{
+	[NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(showTip) object: nil];
+	[tipSet hide];
+}
+
+- (void) showTip
+{
+	NaplesItem *it;
+	NaplesPanel *p;
+	if (tipIndex < 0 || tipIndex >= (NSInteger)[items count] || [self menuOpen] || dragging || movingDock) return;
+	it = [items objectAtIndex: tipIndex];
+	if (it->kind == NaplesItemDivider || ![it->name length]) return;
+	p = [NaplesPanel tipWithTitle: it->name x: 0 top: 0];
+	[self place: p besideSlot: [[slots objectAtIndex: tipIndex] rectValue] pointer: NSZeroPoint gap: 6];
+	if (!tipSet) tipSet = [[NaplesPanelSet alloc] initWithDelegate: self];
+	[tipSet showPanels: [NSArray arrayWithObject: p]];
+}
+
+- (void) mouseMoved: (NSEvent *)e
+{
+	NSInteger i = [self hitIndex: [self convertPoint: [e locationInWindow] fromView: nil]];
+	if (i == tipIndex) return;
+	[self hideTip];
+	tipIndex = i;
+	if (i >= 0 && ![self menuOpen]) [self performSelector: @selector(showTip) withObject: nil afterDelay: 0.4];
+}
+
 - (void) openMenuWithEntries: (NSArray *)entries anchor: (NSRect)slot pointer: (NSPoint)p
 {
 	NSMutableArray *dicts = [NSMutableArray array];
 	NaplesMenuEntry *e;
 	NaplesPanel *panel;
-	NSRect scr = [[NSScreen mainScreen] frame], wf = [[self window] frame], bar, m;
-	NSPoint c;
-	int dockEdge = [dock edge];
 	if (![entries count]) return;
 	for (e in entries)
 		[dicts addObject: [NSDictionary dictionaryWithObjectsAndKeys: e->title, @"title", [NSNumber numberWithBool: YES], @"enabled",
@@ -328,18 +362,7 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 	[menuEntries release]; menuEntries = [entries retain];
 	menuHover = -1;
 	panel = [NaplesPanel panelWithItems: dicts x: 0 top: 0 style: NaplesPanelDark];
-	/* the panel's rectangle in screen coordinates (bottom-left origin): beside the item, away from the screen edge */
-	bar = NSMakeRect(wf.origin.x + barOrigin.x, wf.origin.y + barOrigin.y, barSize.width, barSize.height);
-	c = NSEqualRects(slot, NSZeroRect) ? NSMakePoint(bar.origin.x + p.x, bar.origin.y + p.y) : NSMakePoint(NSMidX(slot) + bar.origin.x, NSMidY(slot) + bar.origin.y);
-	if (dockEdge == NaplesEdgeBottom) m = NSMakeRect(c.x - panel->w / 2, NSMaxY(bar) + 4, panel->w, panel->h);
-	else if (dockEdge == NaplesEdgeLeft) m = NSMakeRect(NSMaxX(bar) + 4, c.y - panel->h / 2, panel->w, panel->h);
-	else m = NSMakeRect(bar.origin.x - 4 - panel->w, c.y - panel->h / 2, panel->w, panel->h);
-	if (NSMaxX(m) > NSMaxX(scr)) m.origin.x = NSMaxX(scr) - m.size.width;
-	if (NSMinX(m) < NSMinX(scr)) m.origin.x = NSMinX(scr);
-	if (NSMaxY(m) > NSMaxY(scr)) m.origin.y = NSMaxY(scr) - m.size.height;
-	if (NSMinY(m) < NSMinY(scr)) m.origin.y = NSMinY(scr);
-	panel->x = m.origin.x - scr.origin.x;
-	panel->top = NSMaxY(scr) - NSMaxY(m);
+	[self place: panel besideSlot: slot pointer: p gap: 4];
 	if (!panelSet) panelSet = [[NaplesPanelSet alloc] initWithDelegate: self];
 	[panelSet showPanels: [NSArray arrayWithObject: panel]];
 }
@@ -355,7 +378,7 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 
 - (void) panelSet: (id)set level: (NSInteger)level hoverRow: (NSInteger)row
 {
-	NaplesPanel *p = [[panelSet panels] firstObject];
+	NaplesPanel *p = set == tipSet ? nil : [[panelSet panels] firstObject];
 	if (!p || p->hoverRow == row) return;
 	p->hoverRow = row;
 	[panelSet showPanels: [panelSet panels]];
@@ -364,15 +387,15 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 - (void) panelSet: (id)set level: (NSInteger)level clickedRow: (NSInteger)row
 {
 	NaplesMenuEntry *entry;
-	if (row < 0 || row >= (NSInteger)[menuEntries count]) return;
+	if (set == tipSet || row < 0 || row >= (NSInteger)[menuEntries count]) return;
 	entry = [[menuEntries objectAtIndex: row] retain];
 	[self closeMenu];
 	if (entry->action) entry->action();
 	[entry release];
 }
 
-- (void) panelSetPointerEntered: (id)set { [self mouseEntered: nil]; }
-- (void) panelSetPointerExited: (id)set { [self mouseExited: nil]; }
+- (void) panelSetPointerEntered: (id)set { if (set != tipSet) [self mouseEntered: nil]; }
+- (void) panelSetPointerExited: (id)set { if (set != tipSet) [self mouseExited: nil]; }
 
 - (void) showMenuForIndex: (NSInteger)i
 {
@@ -395,7 +418,7 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 
 /* the menu closes a moment after the pointer leaves the dock */
 - (void) mouseEntered: (NSEvent *)e { [NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(closeMenu) object: nil]; }
-- (void) mouseExited: (NSEvent *)e { if ([self menuOpen]) [self performSelector: @selector(closeMenu) withObject: nil afterDelay: 1.5]; }
+- (void) mouseExited: (NSEvent *)e { [self hideTip]; tipIndex = -2; if ([self menuOpen]) [self performSelector: @selector(closeMenu) withObject: nil afterDelay: 1.5]; }
 
 - (void) retrack
 {
@@ -421,6 +444,7 @@ edgeForPoint(NSPoint p)
 - (void) mouseDown: (NSEvent *)e
 {
 	NSPoint p = [self convertPoint: [e locationInWindow] fromView: nil];
+	[self hideTip];
 	if ([self menuOpen]) { [self closeMenu]; return; }
 	[downEvent release]; downEvent = [e retain];
 	downPoint = [NSEvent mouseLocation];

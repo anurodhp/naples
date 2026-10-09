@@ -77,6 +77,22 @@ NaplesDrawCheck(NSRect r, NSInteger state, BOOL selected, NaplesPanelStyle style
 	return p;
 }
 
++ (NaplesPanel *) tipWithTitle: (NSString *)title x: (CGFloat)x top: (CGFloat)top
+{
+	NaplesPanel *p = [[[NaplesPanel alloc] init] autorelease];
+	NSDictionary *it = [NSDictionary dictionaryWithObjectsAndKeys: title ? title : @"", @"title", [NSNumber numberWithBool: YES], @"enabled",
+	                    [NSNumber numberWithInt: 0], @"state", nil];
+	p->items = [[NSArray alloc] initWithObjects: it, nil];
+	p->rowTops = [[NSMutableArray alloc] initWithObjects: [NSNumber numberWithDouble: 1], nil];
+	p->style = NaplesPanelDark;
+	p->compact = YES;
+	p->hoverRow = p->openRow = -1;
+	p->w = [title sizeWithAttributes: NaplesMenuTextAttrs(NaplesPanelDark, YES, NO, NO)].width + 20;
+	p->h = RowH + 2;
+	p->x = x; p->top = top;
+	return p;
+}
+
 - (CGFloat) rowHeightAt: (NSUInteger)i { return NaplesIsSeparator([items objectAtIndex: i]) ? SepH : RowH; }
 
 - (void) dealloc { [items release]; [rowTops release]; [super dealloc]; }
@@ -172,7 +188,7 @@ NaplesDrawCheck(NSRect r, NSInteger state, BOOL selected, NaplesPanelStyle style
 		a = NaplesMenuTextAttrs(st, enabled, sel, NO);
 		if ([[it objectForKey: @"state"] integerValue] != 0)
 			NaplesDrawCheck(NSMakeRect(rr.origin.x + 5, rr.origin.y, 12, rr.size.height), [[it objectForKey: @"state"] integerValue], sel, st);
-		[[it objectForKey: @"title"] drawAtPoint: NSMakePoint(rr.origin.x + 20, rr.origin.y + 3) withAttributes: a];
+		[[it objectForKey: @"title"] drawAtPoint: NSMakePoint(rr.origin.x + (panel->compact ? 6 : 20), rr.origin.y + 3) withAttributes: a];
 		if ((ks = NaplesKeyString(it)))
 			[ks drawAtPoint: NSMakePoint(NSMaxX(rr) - [ks sizeWithAttributes: a].width - 10, rr.origin.y + 3) withAttributes: a];
 		if ([it objectForKey: @"submenu"]) {	/* cascade arrow */

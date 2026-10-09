@@ -22,8 +22,10 @@ void NaplesDrawCheck(NSRect r, NSInteger state, BOOL selected, NaplesPanelStyle 
 	NSInteger hoverRow;	/* highlighted row, -1 none */
 	NSInteger openRow;	/* row whose submenu is open, -1 none */
 	NaplesPanelStyle style;
+	BOOL compact;	/* a one-line label (tool tip): no minimum width, text close to the edge */
 }
 + (NaplesPanel *) panelWithItems: (NSArray *)items x: (CGFloat)x top: (CGFloat)top style: (NaplesPanelStyle)style;
++ (NaplesPanel *) tipWithTitle: (NSString *)title x: (CGFloat)x top: (CGFloat)top;	/* dark label, x/top set by the caller */
 - (CGFloat) rowHeightAt: (NSUInteger)i;
 @end
 

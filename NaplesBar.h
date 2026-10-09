@@ -27,6 +27,7 @@
 /* for the view */
 - (NSDictionary *) menuData;	/* the frontmost application's menu, nil if it has none */
 - (NSString *) frontName;
+- (void) showAbout;	/* About Naples, the standard GNUstep info panel (as Milan's) */
 - (NSDictionary *) systemMenu;	/* the Hexley menu; items carry a "block" */
 - (NSImage *) hexley;
 - (void) prepareMenu;	/* ask the application for fresh enabled/checked state before a menu opens */

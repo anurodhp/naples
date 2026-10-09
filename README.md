@@ -6,6 +6,7 @@ Pure AppKit + Xlib + libdispatch; no extra libraries beyond the X11 ones the sta
 - **Bottom bar** (drag the bar's background to the left or right edge to move it; the choice persists).
   Left to right: **Milan** (fixed), your **pinned apps**, a divider, **running programs** that are not pinned,
   **minimized windows**, **Trash** (fixed).
+- Rest the pointer on an icon for half a second and its name appears (a small label panel; NSView tool tips need a window this stack does not paint).
 - Click an app to start it; click a running one to bring its window forward (un-minimizing it). A **white dot**
   marks running apps (on the screen-edge side of the icon).
 - **Long click** (0.5 s) or right-click: menu with Show / **Quit** (SIGTERM) / **Force Quit** (SIGKILL), Keep in Dock /
@@ -19,7 +20,7 @@ Pure AppKit + Xlib + libdispatch; no extra libraries beyond the X11 ones the sta
 
 ## Menu bar
 
-A second window across the top (`NaplesBar`): a **Hexley head** at the far left (opens a system menu: Open Milan, dock
+A second window across the top (`NaplesBar`): a **Hexley head** at the far left (opens a system menu: About Naples, Open Milan, dock
 position, Quit Naples), the **frontmost app's menu titles** after it, and the **date and time** at the far right. It
 reserves its strip with a strut. Disable with `-NaplesBar NO`.
 
