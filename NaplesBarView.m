@@ -19,7 +19,7 @@ isSep(NSDictionary *item)
 static NSDictionary *
 textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 {
-	NSColor *c = selected ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 1 alpha: enabled ? 0.95 : 0.4];
+	NSColor *c = selected ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 0.08 alpha: enabled ? 1.0 : 0.38];
 	return [NSDictionary dictionaryWithObjectsAndKeys: bold ? [NSFont boldSystemFontOfSize: 12] : [NSFont systemFontOfSize: 12], NSFontAttributeName,
 	        c, NSForegroundColorAttributeName, nil];
 }
@@ -193,7 +193,7 @@ static void
 drawCheck(NSRect r, NSInteger state, BOOL selected)
 {
 	NSBezierPath *p = [NSBezierPath bezierPath];
-	[(selected ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 1 alpha: 0.9]) set];
+	[(selected ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 0.08 alpha: 0.9]) set];
 	[p setLineWidth: 1.6];
 	if (state == 1) {
 		[p moveToPoint: NSMakePoint(NSMinX(r) + 1, NSMidY(r))];
@@ -222,14 +222,14 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 	NSSize cs;
 	NSRectFillUsingOperation(dirty, NSCompositeClear);
 
-	[[NSColor colorWithCalibratedWhite: 0.10 alpha: 0.55] set];
+	[[NSColor colorWithCalibratedWhite: 0.96 alpha: 0.94] set];
 	NSRectFill(barR);
-	[[NSColor colorWithCalibratedWhite: 1 alpha: 0.22] set];
+	[[NSColor colorWithCalibratedWhite: 0 alpha: 0.28] set];
 	NSRectFill(NSMakeRect(0, barR.origin.y, barR.size.width, 1));
 
 	{	/* Hexley, where the Apple logo would be */
 		NSRect hr = [self viewRectForTopDown: hexleyRect.origin.x top: 0 w: hexleyRect.size.width h: BarH];
-		if (openTop == -2) { [[NSColor colorWithCalibratedWhite: 1 alpha: 0.25] set]; NSRectFill(hr); }
+		if (openTop == -2) { [[NSColor colorWithCalibratedWhite: 0 alpha: 0.14] set]; NSRectFill(hr); }
 		if (h) {
 			CGFloat hh = 16, hw = [h size].width * hh / [h size].height;
 			NSRect src = NSZeroRect;
@@ -261,9 +261,9 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 	for (p in panels) {
 		NSRect pr = [self viewRectForTopDown: p->x top: p->top w: p->w h: p->h];
 		NSUInteger lvl = [panels indexOfObject: p], i;
-		[[NSColor colorWithCalibratedWhite: 0.12 alpha: 0.94] set];
+		[[NSColor colorWithCalibratedWhite: 0.97 alpha: 0.98] set];
 		[rounded(pr) fill];
-		[[NSColor colorWithCalibratedWhite: 1 alpha: 0.3] set];
+		[[NSColor colorWithCalibratedWhite: 0 alpha: 0.35] set];
 		[rounded(NSInsetRect(pr, 0.5, 0.5)) stroke];
 		for (i = 0; i < [p->items count]; i++) {
 			NSDictionary *it = [p->items objectAtIndex: i];
@@ -272,7 +272,7 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 			BOOL enabled = [[it objectForKey: @"enabled"] boolValue], sel;
 			NSString *ks;
 			if (isSep(it)) {
-				[[NSColor colorWithCalibratedWhite: 1 alpha: 0.25] set];
+				[[NSColor colorWithCalibratedWhite: 0 alpha: 0.2] set];
 				NSRectFill(NSMakeRect(rr.origin.x + 4, NSMidY(rr), rr.size.width - 8, 1));
 				continue;
 			}
@@ -290,7 +290,7 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 			}
 			if ([it objectForKey: @"submenu"]) {	/* cascade arrow */
 				NSBezierPath *ar = [NSBezierPath bezierPath];
-				[(sel ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 1 alpha: enabled ? 0.8 : 0.4]) set];
+				[(sel ? [NSColor whiteColor] : [NSColor colorWithCalibratedWhite: 0.08 alpha: enabled ? 0.8 : 0.35]) set];
 				[ar moveToPoint: NSMakePoint(NSMaxX(rr) - 12, NSMidY(rr) + 4)];
 				[ar lineToPoint: NSMakePoint(NSMaxX(rr) - 7, NSMidY(rr))];
 				[ar lineToPoint: NSMakePoint(NSMaxX(rr) - 12, NSMidY(rr) - 4)];
