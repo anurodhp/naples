@@ -56,7 +56,7 @@ draggable(NaplesItem *it)
 	NSInteger want = [[NSUserDefaults standardUserDefaults] integerForKey: @"NaplesIconSize"], total, i;
 	NaplesItem *it;
 	CGFloat pos;
-	[self hideTip];
+	if (tipIndex >= (NSInteger)[newItems count]) [self hideTip];	/* not on every reload: a rebuild must not take the label away */
 	[items release]; items = [newItems retain];
 	edge = e;
 	iconSize = want >= 24 && want <= 128 ? (int)want : 44;
@@ -324,6 +324,7 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 
 - (void) hideTip
 {
+	if ([tipSet isShowing] && [[NSUserDefaults standardUserDefaults] boolForKey: @"NaplesDebug"]) NSLog(@"Naples dock: hideTip (was showing)");
 	[NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(showTip) object: nil];
 	[tipSet hide];
 }
@@ -334,16 +335,19 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 	NaplesPanel *p;
 	if (tipIndex < 0 || tipIndex >= (NSInteger)[items count] || [self menuOpen] || dragging || movingDock) return;
 	it = [items objectAtIndex: tipIndex];
+	if ([[NSUserDefaults standardUserDefaults] boolForKey: @"NaplesDebug"]) NSLog(@"Naples dock: showTip %@", it->name);
 	if (it->kind == NaplesItemDivider || ![it->name length]) return;
 	p = [NaplesPanel tipWithTitle: it->name x: 0 top: 0];
 	[self place: p besideSlot: [[slots objectAtIndex: tipIndex] rectValue] pointer: NSZeroPoint gap: 6];
 	if (!tipSet) tipSet = [[NaplesPanelSet alloc] initWithDelegate: self];
 	[tipSet showPanels: [NSArray arrayWithObject: p]];
+	[self performSelector: @selector(hideTip) withObject: nil afterDelay: 4.0];	/* never left behind if the pointer left without a Leave event */
 }
 
 - (void) mouseMoved: (NSEvent *)e
 {
 	NSInteger i = [self hitIndex: [self convertPoint: [e locationInWindow] fromView: nil]];
+	if ([[NSUserDefaults standardUserDefaults] boolForKey: @"NaplesDebug"]) NSLog(@"Naples dock: mouseMoved index %ld (tip %ld)", (long)i, (long)tipIndex);
 	if (i == tipIndex) return;
 	[self hideTip];
 	tipIndex = i;

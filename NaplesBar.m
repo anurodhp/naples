@@ -302,7 +302,7 @@ pidOfClient(NSString *client)
 	NSDictionary *opts = [NSDictionary dictionaryWithObjectsAndKeys:
 	    @"Naples", @"ApplicationName",
 	    @"A dock and global menu bar for GNUstep and Window Maker.", @"ApplicationDescription",
-	    [ver length] ? ver : @"0.2", @"ApplicationRelease",
+	    [ver length] ? ver : @"0.3", @"ApplicationRelease",
 	    [NSArray arrayWithObject: @"Anurodh Pokharel"], @"Authors",
 	    @"Copyright \u00a9 2026 Anurodh Pokharel. MIT licence.", @"Copyright",
 	    @"Hexley DarwinOS Mascot Copyright 2000 by Jon Hooper. All Rights Reserved.", @"CopyrightDescription",

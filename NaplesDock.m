@@ -92,6 +92,8 @@ bundleOfExecutable(NSString *exe)
 
 	if (saved) {
 		[pinned addObjectsFromArray: saved];
+		[pinned removeObject: [[NSBundle mainBundle] bundlePath]];	/* the dock is not one of its own apps (older first runs pinned it) */
+		if ([pinned count] != [saved count]) [self savePinned];
 	} else {	/* first run: whatever is installed, so the dock is not empty */
 		NSString *f;
 		for (f in [[[NSFileManager defaultManager] contentsOfDirectoryAtPath: @"/Applications" error: NULL] sortedArrayUsingSelector: @selector(compare:)])
@@ -492,7 +494,7 @@ bundleOfExecutable(NSString *exe)
 - (void) pinPath: (NSString *)path atIndex: (NSInteger)index
 {
 	NSUInteger old = [pinned indexOfObject: path];
-	if ([path isEqualToString: milanPath]) return;
+	if ([path isEqualToString: milanPath] || [path isEqualToString: [[NSBundle mainBundle] bundlePath]]) return;
 	if (old != NSNotFound) { [pinned removeObjectAtIndex: old]; if ((NSInteger)old < index) index--; }
 	if (index < 0 || index > (NSInteger)[pinned count]) index = [pinned count];
 	[pinned insertObject: path atIndex: index];

@@ -281,6 +281,8 @@ ignoreXError(Display *d, XErrorEvent *e)
 		if (![self wantsWindow: w]) continue;
 		info = [self infoForWindow: w];
 		if (!info || info->pid == getpid()) continue;
+		/* GNUstep windows carry no pid: Naples' own windows (the About panel) are found by their WM_CLASS, the app name */
+		if ([info->wmClass isEqualToString: [[NSProcessInfo processInfo] processName]]) continue;
 		[out addObject: info];
 	}
 	if (list) XFree(list);

@@ -1,5 +1,6 @@
 #import "NaplesPanel.h"
 #import "NaplesX.h"
+#import <GNUstepGUI/GSDisplayServer.h>
 
 enum { RowH = 20, SepH = 9, PanelPad = 4, MinPanelW = 150, Radius = 5 };
 
@@ -268,7 +269,9 @@ NaplesDrawCheck(NSRect r, NSInteger state, BOOL selected, NaplesPanelStyle style
 		} else {
 			w = [[[NaplesPanelWindow alloc] initWithContentRect: frame styleMask: NSBorderlessWindowMask backing: NSBackingStoreBuffered defer: NO] autorelease];
 			v = [[[NaplesPanelView alloc] initWithFrame: NSMakeRect(0, 0, p->w, p->h)] autorelease];
-			[w setLevel: NSPopUpMenuWindowLevel];
+			/* a dock-type window like the dock and bar: the window manager does not focus it or put it in the client list
+			 * (NSPopUpMenuWindowLevel makes GNUstep tag it as a dialog, which Window Maker manages and focuses) */
+			[w setLevel: NSStatusWindowLevel];
 			[w setOpaque: NO];
 			[w setBackgroundColor: [NSColor clearColor]];
 			[w setHasShadow: NO];
@@ -276,13 +279,16 @@ NaplesDrawCheck(NSRect r, NSInteger state, BOOL selected, NaplesPanelStyle style
 			[w setCanHide: NO];
 			[w setContentView: v];
 			[windows addObject: w];
+			[[NaplesX shared] registerOwnWindow: (unsigned long)[GSCurrentServer() windowDevice: [w windowNumber]]];
 		}
 		if (!NSEqualRects(frame, [w frame])) {
 			[w setFrame: frame display: NO];
 			[v setFrame: NSMakeRect(0, 0, p->w, p->h)];
 		}
 		[v setPanel: p level: (NSInteger)i set: self];
-		if (![w isVisible]) [w orderFrontRegardless];
+		/* always, not only when not visible: after orderOut: the window can still count as visible and stay unmapped */
+		[w orderFrontRegardless];
+		[w display];
 	}
 	for (i = [panels count]; i < [windows count]; i++) [[windows objectAtIndex: i] orderOut: nil];
 	[shown setArray: panels];
