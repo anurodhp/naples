@@ -3,7 +3,7 @@
  * Tracks the top-level windows (_NET_CLIENT_LIST, WM_STATE), activates / closes them, and sets the dock hints
  * (window type, strut, XShape mask for the 5px rounded corners) on Naples' own window.
  * Window Maker is told to leave minimizing to us by DisableMiniwindows (see NaplesEnsureWMTakeover). */
-#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 
 @interface NaplesWindowInfo : NSObject {
 @public
@@ -35,6 +35,11 @@
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius;
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius square: (NSUInteger)square;
 - (BOOL) hasCompositor;
+/* Pseudo-transparency (no compositor on this stack): the desktop wallpaper under a screen rectangle (top-left origin),
+ * from the root pixmap Milan publishes in _XROOTPMAP_ID. nil if there is none. */
+- (NSImage *) backgroundForRect: (NSRect)xRect;
+/* Called (main thread) whenever the root pixmap changes; any number of handlers. */
+- (void) addBackgroundHandler: (void (^)(void))handler;
 @end
 
 /* Window Maker draws a miniwindow icon for every minimized window unless told not to. Writes DisableMiniwindows = YES

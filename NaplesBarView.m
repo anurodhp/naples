@@ -66,7 +66,14 @@ keyString(NSDictionary *item)
 	return self;
 }
 
-- (void) dealloc { [titleRects release]; [titleIdx release]; [chain release]; [super dealloc]; }
+- (void) setBackdrop: (NSImage *)img
+{
+	if (img == backdrop) return;
+	[backdrop release]; backdrop = [img retain];
+	[self setNeedsDisplay: YES];
+}
+
+- (void) dealloc { [backdrop release]; [titleRects release]; [titleIdx release]; [chain release]; [super dealloc]; }
 
 - (BOOL) isFlipped { return NO; }
 - (BOOL) isOpaque { return NO; }
@@ -222,8 +229,15 @@ drawCheck(NSRect r, NSInteger state, BOOL selected)
 	NSSize cs;
 	NSRectFillUsingOperation(dirty, NSCompositeClear);
 
-	[[NSColor colorWithCalibratedWhite: 0.96 alpha: 0.94] set];
-	NSRectFill(barR);
+	if (backdrop) {	/* translucent: the wallpaper under the bar, washed with white */
+		NSRect src = NSZeroRect;
+		src.size = [backdrop size];
+		[backdrop drawInRect: barR fromRect: src operation: NSCompositeSourceOver fraction: 1.0];
+		[[NSColor colorWithCalibratedWhite: 1 alpha: 0.62] set];
+	} else {
+		[[NSColor colorWithCalibratedWhite: 0.96 alpha: 0.94] set];
+	}
+	NSRectFillUsingOperation(barR, NSCompositeSourceOver);
 	[[NSColor colorWithCalibratedWhite: 0 alpha: 0.28] set];
 	NSRectFill(NSMakeRect(0, barR.origin.y, barR.size.width, 1));
 

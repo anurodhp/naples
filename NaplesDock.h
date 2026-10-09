@@ -50,6 +50,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 	BOOL trashFull;
 	NSString *milanPath;
 	dispatch_source_t trashSource;
+	NSRect backdropRect;	/* X coordinates of the bar the current backdrop was cut for */
 }
 - (void) start;
 - (NSArray *) items;

@@ -1,3 +1,4 @@
+#import <AppKit/AppKit.h>
 #import "NaplesX.h"
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -44,10 +45,11 @@ ignoreXError(Display *d, XErrorEvent *e)
 	dispatch_source_t readSource;
 	void (^changeHandler)(void);
 	void (^activeHandler)(void);
+	NSMutableArray *backgroundHandlers;
 	NSMutableSet *selected;	/* windows we already listen to */
 	struct {
 		Atom clientList, wmState, netWmState, name, netName, utf8, pid, windowType, typeNormal, typeDialog,
-		     activeWindow, closeWindow, strutPartial, strut, opacity, skipTaskbar, sticky, above, desktop, cm;
+		     activeWindow, rootPmap, closeWindow, strutPartial, strut, opacity, skipTaskbar, sticky, above, desktop, cm;
 	} a;
 }
 
@@ -73,7 +75,7 @@ ignoreXError(Display *d, XErrorEvent *e)
 	ATOM(closeWindow, "_NET_CLOSE_WINDOW"); ATOM(strutPartial, "_NET_WM_STRUT_PARTIAL"); ATOM(strut, "_NET_WM_STRUT");
 	ATOM(opacity, "_NET_WM_WINDOW_OPACITY"); ATOM(skipTaskbar, "_NET_WM_STATE_SKIP_TASKBAR");
 	ATOM(sticky, "_NET_WM_STATE_STICKY"); ATOM(above, "_NET_WM_STATE_ABOVE"); ATOM(desktop, "_NET_WM_DESKTOP");
-	ATOM(cm, "_NET_WM_CM_S0");
+	ATOM(cm, "_NET_WM_CM_S0"); ATOM(rootPmap, "_XROOTPMAP_ID");
 #undef ATOM
 	XSelectInput(dpy, root, PropertyChangeMask);
 
@@ -98,6 +100,42 @@ ignoreXError(Display *d, XErrorEvent *e)
 	changeHandler = h ? Block_copy(h) : nil;
 }
 
+- (void) addBackgroundHandler: (void (^)(void))h
+{
+	if (!backgroundHandlers) backgroundHandlers = [[NSMutableArray alloc] init];
+	[backgroundHandlers addObject: [[h copy] autorelease]];
+}
+
+- (NSImage *) backgroundForRect: (NSRect)r
+{
+	unsigned long n, *v;
+	Pixmap pix;
+	XImage *xi;
+	NSBitmapImageRep *rep;
+	NSImage *img;
+	int x = (int)r.origin.x, y = (int)r.origin.y, w = (int)r.size.width, h = (int)r.size.height, row, col;
+	if (!dpy || w <= 0 || h <= 0 || !(v = [self longs: a.rootPmap of: root type: XA_PIXMAP count: &n])) return nil;
+	pix = v[0];
+	XFree(v);
+	if (!pix || !(xi = XGetImage(dpy, pix, x, y, w, h, AllPlanes, ZPixmap))) return nil;
+	if (xi->bits_per_pixel != 32 || xi->red_mask != 0xff0000 || xi->green_mask != 0xff00 || xi->blue_mask != 0xff || xi->byte_order != LSBFirst) {
+		XDestroyImage(xi);
+		return nil;
+	}
+	rep = [[[NSBitmapImageRep alloc] initWithBitmapDataPlanes: NULL pixelsWide: w pixelsHigh: h bitsPerSample: 8 samplesPerPixel: 3
+	                                                 hasAlpha: NO isPlanar: NO colorSpaceName: NSCalibratedRGBColorSpace
+	                                              bytesPerRow: 0 bitsPerPixel: 24] autorelease];
+	for (row = 0; row < h; row++) {
+		const unsigned char *s = (const unsigned char *)xi->data + (size_t)row * xi->bytes_per_line;
+		unsigned char *d = [rep bitmapData] + (size_t)row * [rep bytesPerRow];
+		for (col = 0; col < w; col++, s += 4, d += 3) { d[0] = s[2]; d[1] = s[1]; d[2] = s[0]; }
+	}
+	XDestroyImage(xi);
+	img = [[[NSImage alloc] initWithSize: NSMakeSize(w, h)] autorelease];
+	[img addRepresentation: rep];
+	return img;
+}
+
 - (void) setActiveHandler: (void (^)(void))h
 {
 	Block_release(activeHandler);
@@ -106,7 +144,7 @@ ignoreXError(Display *d, XErrorEvent *e)
 
 - (void) drain
 {
-	BOOL changed = NO, activeChanged = NO;
+	BOOL changed = NO, activeChanged = NO, bgChanged = NO;
 	XEvent ev;
 	while (XPending(dpy)) {
 		XNextEvent(dpy, &ev);
@@ -114,6 +152,7 @@ ignoreXError(Display *d, XErrorEvent *e)
 		if (ev.xproperty.window == root) {
 			if (ev.xproperty.atom == a.clientList) changed = YES;
 			if (ev.xproperty.atom == a.activeWindow) activeChanged = YES;
+			if (ev.xproperty.atom == a.rootPmap) bgChanged = YES;
 		} else if (ev.xproperty.atom == a.wmState || ev.xproperty.atom == a.netWmState ||
 		           ev.xproperty.atom == a.name || ev.xproperty.atom == a.netName || ev.xproperty.atom == a.pid) {
 			changed = YES;
@@ -121,6 +160,10 @@ ignoreXError(Display *d, XErrorEvent *e)
 	}
 	if (changed && changeHandler) changeHandler();
 	if (activeChanged && activeHandler) activeHandler();
+	if (bgChanged) {
+		void (^h)(void);
+		for (h in backgroundHandlers) h();
+	}
 }
 
 /* ---- properties ---- */

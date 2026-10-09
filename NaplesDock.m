@@ -118,6 +118,7 @@ executableOfPid(int pid)
 
 	[[NaplesX shared] connect];
 	[[NaplesX shared] setChangeHandler: ^{ [self rebuild]; }];
+	[[NaplesX shared] addBackgroundHandler: ^{ backdropRect = NSZeroRect; [self relayout]; }];
 	[self watchTrash];
 
 	view = [[NaplesDockView alloc] initWithDock: self];
@@ -336,6 +337,13 @@ executableOfPid(int pid)
 	if ([view menuOpen]) {
 		r = [view menuRect];
 		[shape addObject: [NSValue valueWithRect: NSMakeRect(r.origin.x, frame.size.height - NSMaxY(r), r.size.width, r.size.height)]];
+	}
+	{	/* the wallpaper under the bar, re-read when the bar moves or the wallpaper changes */
+		NSRect xbar = NSMakeRect(bar.origin.x, scr.size.height - NSMaxY(bar), bar.size.width, bar.size.height);
+		if (!NSEqualRects(xbar, backdropRect)) {
+			backdropRect = xbar;
+			[view setBackdrop: [[NaplesX shared] backgroundForRect: xbar]];
+		}
 	}
 	[[NaplesX shared] setShape: [self xid] rects: shape radius: 5];
 	[self applyHints: [self xid]];

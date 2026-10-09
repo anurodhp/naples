@@ -31,7 +31,9 @@
 	BOOL dropOnTrash;
 	NSTrackingRectTag trackTag;
 	BOOL tracking;
+	NSImage *backdrop;	/* the wallpaper under the bar (pseudo-transparency), nil if unknown */
 }
+- (void) setBackdrop: (NSImage *)img;
 - (id) initWithDock: (NaplesDock *)d;
 - (void) reloadItems: (NSArray *)newItems edge: (int)e maxLength: (CGFloat)maxLen;
 - (NSSize) barSize;

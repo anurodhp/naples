@@ -111,11 +111,13 @@ localSeparator(void)
 		NSLog(@"Naples: could not register %@ (another menu server running?)", NaplesMenuServerName);
 
 	[[NaplesX shared] setActiveHandler: ^{ [self activeWindowChanged]; }];
+	[[NaplesX shared] addBackgroundHandler: ^{ [self refreshBackdrop]; }];
 	[self activeWindowChanged];
 
 	xid = (unsigned long)[GSCurrentServer() windowDevice: [window windowNumber]];
 	[[NaplesX shared] setDockHints: xid edge: 3 barRect: NSMakeRect(0, 0, scr.size.width, [view barHeight]) reserve: YES opacity: 1.0];
 	[view reload];
+	[self refreshBackdrop];
 	[window orderFrontRegardless];
 	[self viewResized];
 	[window display];
@@ -127,6 +129,11 @@ localSeparator(void)
 	dispatch_source_set_event_handler(t, ^{ NaplesRunOnMain(^{ [view setNeedsDisplay: YES]; }); });
 	dispatch_resume(t);
 	clockSource = t;
+}
+
+- (void) refreshBackdrop
+{
+	[view setBackdrop: [[NaplesX shared] backgroundForRect: NSMakeRect(0, 0, [[NSScreen mainScreen] frame].size.width, [view barHeight])]];
 }
 
 - (void) viewResized

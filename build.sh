@@ -17,6 +17,6 @@ NAPLES_SRC="$NAPLES_DIR" "$STAGING/build_naples.sh"
 [ "${1:-}" = deploy ] || exit 0
 HOST="${DEPLOY_HOST:-root@10.0.0.142}"
 GSROOT="$(cd "$STAGING/libc_build/gnustep/root/usr/GNUstep/System" && pwd -P)"
-tar -C "$GSROOT/Applications" -cf - Naples.app |
-    ssh "$HOST" 'rm -rf /Applications/Naples.app && tar -C /Applications -xf -'
-echo "deployed Naples.app to $HOST"
+tar -C "$GSROOT/Applications" -cf - Naples.app Milan.app |
+    ssh "$HOST" 'rm -rf /Applications/Naples.app /Applications/Milan.app && tar -C /Applications -xf -'
+echo "deployed Naples.app and Milan.app to $HOST"

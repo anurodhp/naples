@@ -29,9 +29,16 @@ draggable(NaplesItem *it)
 	return self;
 }
 
+- (void) setBackdrop: (NSImage *)img
+{
+	if (img == backdrop) return;
+	[backdrop release]; backdrop = [img retain];
+	[self setNeedsDisplay: YES];
+}
+
 - (void) dealloc
 {
-	[items release]; [slots release]; [menuEntries release]; [downEvent release];
+	[backdrop release]; [items release]; [slots release]; [menuEntries release]; [downEvent release];
 	[super dealloc];
 }
 
@@ -214,8 +221,19 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 	NSRectFillUsingOperation(dirty, NSCompositeClear);
 
 	/* the bar: translucent, 5px corners (XShape cuts the window to the same outline) */
-	[[NSColor colorWithCalibratedWhite: 0.10 alpha: 0.45] set];
-	[rounded(bar) fill];
+	if (backdrop) {	/* translucent: the wallpaper under the bar, darkened */
+		NSRect src = NSZeroRect;
+		src.size = [backdrop size];
+		[NSGraphicsContext saveGraphicsState];
+		[rounded(bar) addClip];
+		[backdrop drawInRect: bar fromRect: src operation: NSCompositeSourceOver fraction: 1.0];
+		[[NSColor colorWithCalibratedWhite: 0.05 alpha: 0.38] set];
+		NSRectFillUsingOperation(bar, NSCompositeSourceOver);
+		[NSGraphicsContext restoreGraphicsState];
+	} else {
+		[[NSColor colorWithCalibratedWhite: 0.10 alpha: 0.45] set];
+		[rounded(bar) fill];
+	}
 	[[NSColor colorWithCalibratedWhite: 1.0 alpha: 0.28] set];
 	[rounded(NSInsetRect(bar, 0.5, 0.5)) stroke];
 

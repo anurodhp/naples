@@ -15,7 +15,9 @@
 	NSInteger hoverLevel, hoverRow;
 	NSTrackingRectTag trackTag;
 	BOOL tracking;
+	NSImage *backdrop;
 }
+- (void) setBackdrop: (NSImage *)img;
 - (id) initWithBar: (NaplesBar *)b;
 - (CGFloat) barHeight;
 - (void) reload;	/* the menu or the front application changed */
