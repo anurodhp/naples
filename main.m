@@ -30,6 +30,11 @@
 	}
 }
 
+/* The dock has no document windows. Closing the About panel, the one window that can become main, would otherwise reach
+ * NSApplication -_lastWindowClosed (gui-src/Source/NSApplication.m:4186), which terminates when the delegate does not answer
+ * this and the menu interface style is Windows95. */
+- (BOOL) applicationShouldTerminateAfterLastWindowClosed: (NSApplication *)a { return NO; }
+
 @end
 
 int
