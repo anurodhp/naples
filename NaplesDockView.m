@@ -1,7 +1,7 @@
 #import "NaplesDockView.h"
 #import "NaplesX.h"
 
-enum { Pad = 6, Gap = 4, DividerLen = 10, OuterMargin = 13, InnerMargin = 5, Radius = 5, EntryH = 22, LongClickMs = 500 };
+enum { Pad = 6, Gap = 4, DividerLen = 10, OuterMargin = 13, InnerMargin = 11, BounceH = 9, Radius = 5, EntryH = 22, LongClickMs = 500 };
 
 static NSBezierPath *
 rounded(NSRect r)
@@ -78,6 +78,23 @@ draggable(NaplesItem *it)
 		[slots addObject: [NSValue valueWithRect: r]];
 		pos += len + Gap;
 	}
+	{	/* the launch bounce runs on a 30 fps timer for as long as any icon is launching */
+		BOOL any = NO;
+		for (it in items) if (it->launchStart > 0) any = YES;
+		if (any && !bounceTimer)
+			bounceTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0 / 30 target: self selector: @selector(bounceTick:) userInfo: nil repeats: YES];
+		if (!any && bounceTimer) { [bounceTimer invalidate]; bounceTimer = nil; }
+	}
+	[self setNeedsDisplay: YES];
+}
+
+- (void) bounceTick: (NSTimer *)t
+{
+	NaplesItem *it;
+	BOOL any = NO;
+	for (it in items)
+		if (it->launchStart > 0 && [NSDate timeIntervalSinceReferenceDate] - it->launchStart < 30) any = YES;
+	if (!any) { [bounceTimer invalidate]; bounceTimer = nil; }
 	[self setNeedsDisplay: YES];
 }
 
@@ -259,6 +276,12 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 			[[NSColor whiteColor] set]; NSFrameRect(g);
 			NSRectFill(NSMakeRect(g.origin.x, NSMaxY(g) - 3, g.size.width, 3));
 		} else {
+			if (it->launchStart > 0 && [NSDate timeIntervalSinceReferenceDate] - it->launchStart < 30) {	/* hop away from the screen edge, one hop every 0.6 s */
+				CGFloat t = [NSDate timeIntervalSinceReferenceDate] - it->launchStart, off = BounceH * fabs(sin(t * M_PI / 0.6));
+				if ([self horizontal]) r.origin.y += off;
+				else if (edge == NaplesEdgeLeft) r.origin.x += off;
+				else r.origin.x -= off;
+			}
 			[self drawIconOf: it inRect: r alpha: alpha];
 		}
 		if ([it running]) {	/* the white dot sits between the icon and the screen edge */

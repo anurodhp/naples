@@ -31,6 +31,7 @@
 	BOOL dropOnTrash, dropHandled;
 	NSTrackingRectTag trackTag;
 	BOOL tracking;
+	NSTimer *bounceTimer;
 	NSImage *backdrop;	/* the wallpaper under the bar (pseudo-transparency), nil if unknown */
 }
 - (void) setBackdrop: (NSImage *)img;

@@ -24,6 +24,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 	NSMutableArray *windows;	/* NaplesWindowInfo */
 	unsigned long xid;	/* NaplesItemWindow: the minimized window */
 	BOOL trashFull;
+	NSTimeInterval launchStart;	/* when the app was started and has no window yet (the icon bounces), else 0 */
 }
 - (BOOL) running;
 @end
@@ -40,6 +41,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 @interface NaplesDock : NSObject {
 	NSMutableArray *pinned;
 	NSArray *items;
+	NSMutableDictionary *launching;	/* path -> NSDate, started by us and no window yet */
 	NSMutableDictionary *launched;	/* path -> NSNumber pid, started by us and not yet gone */
 	NSMutableDictionary *procSources;	/* NSNumber pid -> dispatch source */
 	NSMutableDictionary *icons;

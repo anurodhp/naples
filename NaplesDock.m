@@ -99,6 +99,7 @@ executableOfPid(int pid)
 	unsigned long xid;
 	pinned = [[NSMutableArray alloc] init];
 	launched = [[NSMutableDictionary alloc] init];
+	launching = [[NSMutableDictionary alloc] init];
 	procSources = [[NSMutableDictionary alloc] init];
 	icons = [[NSMutableDictionary alloc] init];
 	runOrder = [[NSMutableArray alloc] init];
@@ -257,6 +258,13 @@ executableOfPid(int pid)
 			[minimized addObject: mi];
 		}
 	}
+	/* the bounce ends with the first window, or after 30 s */
+	for (k in [[launching allKeys] copy]) {
+		NaplesItem *li = [byKey objectForKey: k];
+		NSDate *start = [launching objectForKey: k];
+		if (!li || [li->windows count] || -[start timeIntervalSinceNow] > 30) [launching removeObjectForKey: k];
+		else li->launchStart = [start timeIntervalSinceReferenceDate];
+	}
 	/* processes we started that have no window yet still count as running */
 	for (k in launched) {
 		it = [byKey objectForKey: k];
@@ -376,6 +384,7 @@ executableOfPid(int pid)
 	NS_ENDHANDLER
 	pid = [t processIdentifier];
 	[launched setObject: [NSNumber numberWithInt: pid] forKey: path];
+	if (!file) [launching setObject: [NSDate date] forKey: path];	/* bounces until its first window (or 30 s) */
 	[self watchChild: pid];
 	[self rebuild];
 	return YES;
@@ -400,7 +409,7 @@ executableOfPid(int pid)
 	NSValue *v = [procSources objectForKey: n];
 	NSString *k;
 	if (v) { dispatch_release((dispatch_source_t)[v pointerValue]); [procSources removeObjectForKey: n]; }
-	for (k in [launched allKeysForObject: n]) [launched removeObjectForKey: k];
+	for (k in [launched allKeysForObject: n]) { [launched removeObjectForKey: k]; [launching removeObjectForKey: k]; }
 	[self rebuild];
 }
 
