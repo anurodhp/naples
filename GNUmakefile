@@ -1,0 +1,12 @@
+# naples: a Dock for GNUstep + Window Maker (Darwin/XNU) -- see README.md.
+include $(GNUSTEP_MAKEFILES)/common.make
+
+APP_NAME = Naples
+VERSION = 0.1
+Naples_OBJC_FILES = main.m NaplesX.m NaplesDock.m NaplesDockView.m
+Naples_MAIN_MODEL_FILE =
+Naples_LOCALIZED_RESOURCE_FILES =
+
+ADDITIONAL_OBJCFLAGS += -O2 -Wall -fblocks
+
+include $(GNUSTEP_MAKEFILES)/application.make

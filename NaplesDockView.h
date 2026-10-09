@@ -1,0 +1,47 @@
+/* NaplesDockView: draws the dock and handles every interaction with it.
+ * The view is non-flipped; the bar is a rounded rect somewhere inside the window (the window is larger than the bar
+ * only while the long-click menu is open, because pop-up windows do not paint on this stack: the menu is an overlay
+ * drawn by this view, as in Milan). */
+#import <AppKit/AppKit.h>
+#import "NaplesDock.h"
+
+@interface NaplesDockView : NSView {
+	NaplesDock *dock;
+	NSArray *items;
+	NSMutableArray *slots;	/* NSValue rects in bar coordinates, parallel to items */
+	int edge;
+	int iconSize;
+	NSSize barSize;
+	NSPoint barOrigin;	/* the bar's lower left corner in view coordinates */
+	/* long-click menu */
+	NSArray *menuEntries;
+	NSSize menuSize;
+	NSRect menuAnchor;	/* slot of the item the menu belongs to, bar coordinates (zero for the background) */
+	NSPoint menuPointer;	/* where the background menu was asked for, bar coordinates */
+	NSPoint menuOrigin;
+	NSInteger menuHover;
+	/* mouse state */
+	NSInteger downIndex;	/* item under the button, -1 for the bar, -2 for outside the bar */
+	NSPoint downPoint;	/* screen */
+	NSEvent *downEvent;
+	BOOL dragging, movingDock, longFired;
+	NSInteger dragSource;
+	NSInteger dropIndex;	/* pinned insertion index while something is dragged over the dock, else -1 */
+	NSInteger dropAppIndex;	/* an app icon a document is dragged onto (opens it with that app), else -1 */
+	BOOL dropOnTrash;
+	NSTrackingRectTag trackTag;
+	BOOL tracking;
+}
+- (id) initWithDock: (NaplesDock *)d;
+- (void) reloadItems: (NSArray *)newItems edge: (int)e maxLength: (CGFloat)maxLen;
+- (NSSize) barSize;
+- (void) setBarOrigin: (NSPoint)bar menuOrigin: (NSPoint)menu;
+- (BOOL) menuOpen;
+- (NSSize) menuSize;
+- (NSRect) menuAnchor;
+- (NSPoint) menuPointer;
+- (NSRect) menuRect;	/* in view coordinates */
+- (NSRect) barRect;	/* in view coordinates */
+- (void) openMenuWithEntries: (NSArray *)entries anchor: (NSRect)slot pointer: (NSPoint)p;
+- (void) closeMenu;
+@end
