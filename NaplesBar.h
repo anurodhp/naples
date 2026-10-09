@@ -16,7 +16,7 @@
 	NSMutableDictionary *appMenus;	/* client name -> menuData */
 	NSMutableDictionary *proxies;	/* client name -> DO proxy */
 	NSNumber *frontWindowId;
-	NSString *frontClient, *frontName;
+	NSString *frontClient, *frontName, *frontWMClass;
 	NSImage *hexleyImage;
 	void *clockSource;
 	BOOL loadedHexley;

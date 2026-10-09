@@ -6,6 +6,7 @@
 #
 # IOKIT_DIR   the iokit checkout (default ../iokit)
 # DEPLOY_HOST ssh target for "deploy" (default root@10.0.0.142)
+# deploy stops Naples and Milan first: replacing a running app's files has taken the whole X session down on the Pi.
 set -euo pipefail
 NAPLES_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 IOKIT_DIR="${IOKIT_DIR:-$NAPLES_DIR/../iokit}"
@@ -18,5 +19,5 @@ NAPLES_SRC="$NAPLES_DIR" "$STAGING/build_naples.sh"
 HOST="${DEPLOY_HOST:-root@10.0.0.142}"
 GSROOT="$(cd "$STAGING/libc_build/gnustep/root/usr/GNUstep/System" && pwd -P)"
 tar -C "$GSROOT/Applications" -cf - Naples.app Milan.app |
-    ssh "$HOST" 'rm -rf /Applications/Naples.app /Applications/Milan.app && tar -C /Applications -xf -'
+    ssh "$HOST" 'pkill -x Naples; pkill -x Milan; sleep 1; rm -rf /Applications/Naples.app /Applications/Milan.app && tar -C /Applications -xf -'
 echo "deployed Naples.app and Milan.app to $HOST"

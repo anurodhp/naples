@@ -14,6 +14,14 @@ NSString *const NaplesMenuClientPrefix = @"org.gnustep.Gershwin.MenuClient.";
 - (BOOL) canBecomeMainWindow { return NO; }
 @end
 
+static BOOL
+debugOn(void)
+{
+	static int on = -1;
+	if (on < 0) on = [[NSUserDefaults standardUserDefaults] boolForKey: @"NaplesDebug"];
+	return on;
+}
+
 static NSNumber *
 windowKey(unsigned long xid)
 {
@@ -110,6 +118,7 @@ localSeparator(void)
 	if (![serverConnection registerName: NaplesMenuServerName])
 		NSLog(@"Naples: could not register %@ (another menu server running?)", NaplesMenuServerName);
 
+	[[NaplesX shared] setPidResolver: ^int(unsigned long xid) { return [self pidForWindowId: windowKey(xid)]; }];
 	[[NaplesX shared] setActiveHandler: ^{ [self activeWindowChanged]; }];
 	[[NaplesX shared] addBackgroundHandler: ^{ [self refreshBackdrop]; }];
 	[self activeWindowChanged];
@@ -145,9 +154,19 @@ localSeparator(void)
 		[window setFrame: frame display: NO];
 		[view setFrame: NSMakeRect(0, 0, frame.size.width, h)];
 	}
+	[self applyShape];
+	/* the server (or GNUstep) can drop the shape when the window is resized: apply it again once the resize has settled */
+	[NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(applyShape) object: nil];
+	[self performSelector: @selector(applyShape) withObject: nil afterDelay: 0.15];
+	[view setNeedsDisplay: YES];
+}
+
+- (void) applyShape
+{
+	if (debugOn()) NSLog(@"Naples bar: shape %@ window frame %@ xid 0x%lx", [view shapeRects], NSStringFromRect([window frame]),
+	                     (unsigned long)[GSCurrentServer() windowDevice: [window windowNumber]]);
 	[[NaplesX shared] setShape: (unsigned long)[GSCurrentServer() windowDevice: [window windowNumber]]
 	                     rects: [view shapeRects] radius: 5 square: 1];
-	[view setNeedsDisplay: YES];
 }
 
 /* ---- which application is in front ---- */
@@ -157,12 +176,51 @@ localSeparator(void)
 	NaplesWindowInfo *w = [[NaplesX shared] activeWindow];
 	if (!w || w->pid == getpid()) return;	/* nothing focused: keep showing the last application */
 	[frontClient release]; [frontWindowId release]; [frontName release];
-	frontClient = [[NSString stringWithFormat: @"%@%d", NaplesMenuClientPrefix, w->pid] retain];
 	frontWindowId = [windowKey(w->xid) retain];
+	frontClient = [[self resolveClientForPid: w->pid window: frontWindowId wmClass: w->wmClass] retain];
+	[frontWMClass release]; frontWMClass = [w->wmClass copy];
 	frontName = [([w->wmClass length] ? w->wmClass : w->title ? w->title : @"") retain];
+	if (debugOn()) NSLog(@"Naples bar: front window 0x%lx pid %d class %@ -> %@, menu stored: %@", w->xid, w->pid, w->wmClass, frontClient,
+	                     [self menuData] ? @"yes" : @"no");
 	[view closeMenu];
-	if (![self menuData]) [self requestMenuFromClient: frontClient];	/* apps that started before us have not pushed yet */
+	if (frontClient && ![self menuData]) [self requestMenuFromClient: frontClient];	/* apps that started before us have not pushed yet */
 	[view reload];
+}
+
+/* client names end in the process id */
+static int
+pidOfClient(NSString *client)
+{
+	return [[client substringFromIndex: [NaplesMenuClientPrefix length]] intValue];
+}
+
+- (NSString *) clientForWindowId: (NSNumber *)wid
+{
+	NSString *c;
+	for (c in windowMenus) if ([[windowMenus objectForKey: c] objectForKey: wid]) return c;
+	return nil;
+}
+
+- (int) pidForWindowId: (NSNumber *)wid
+{
+	NSString *c = [self clientForWindowId: wid];
+	return c ? pidOfClient(c) : 0;
+}
+
+/* the menu client of the front window: by pid when the window has one, else by the window id the client pushed its
+ * menu for, else by a client whose executable has the window's WM_CLASS name */
+- (NSString *) resolveClientForPid: (int)pid window: (NSNumber *)wid wmClass: (NSString *)cls
+{
+	NSString *c;
+	if (pid > 0) return [NSString stringWithFormat: @"%@%d", NaplesMenuClientPrefix, pid];
+	if ((c = [self clientForWindowId: wid])) return c;
+	if ([cls length]) {
+		NSMutableSet *all = [NSMutableSet setWithArray: [appMenus allKeys]];
+		[all addObjectsFromArray: [windowMenus allKeys]];
+		for (c in all)
+			if ([[NaplesExecutableOfPid(pidOfClient(c)) lastPathComponent] caseInsensitiveCompare: cls] == NSOrderedSame) return c;
+	}
+	return nil;
 }
 
 - (NSString *) frontName { return frontName ? frontName : @""; }
@@ -197,6 +255,7 @@ localSeparator(void)
 - (void) requestMenuFromClient: (NSString *)name
 {
 	id proxy = [self proxyForClient: name];
+	if (debugOn()) NSLog(@"Naples bar: asking %@ for its menu (proxy %@)", name, proxy ? @"found" : @"NOT registered");
 	@try { [proxy requestApplicationMenuUpdate]; } @catch (NSException *e) { }
 }
 
@@ -282,16 +341,25 @@ localSeparator(void)
 - (void) storeWindowMenu: (NSDictionary *)menu window: (NSNumber *)wid client: (NSString *)client
 {
 	NSMutableDictionary *per;
+	if (debugOn()) NSLog(@"Naples bar: window menu from %@ window %@ (%lu items)", client, wid, (unsigned long)[[menu objectForKey: @"items"] count]);
 	if (![menu isKindOfClass: [NSDictionary class]] || !wid || !client) return;
 	if (!(per = [windowMenus objectForKey: client])) { per = [NSMutableDictionary dictionary]; [windowMenus setObject: per forKey: client]; }
+	BOOL newPair = ![per objectForKey: wid];
 	[per setObject: menu forKey: wid];
+	if (newPair) [[NaplesX shared] noteWindowsChanged];	/* the dock can now tell which process owns this window */
+	if (!frontClient && frontWindowId && [wid isEqual: frontWindowId]) frontClient = [client retain];
 	if ([client isEqualToString: frontClient]) [self refreshIfNotTracking];
 }
 
 - (void) storeAppMenu: (NSDictionary *)menu client: (NSString *)client
 {
+	if (debugOn()) NSLog(@"Naples bar: app menu from %@ (%lu items)", client, (unsigned long)[[menu objectForKey: @"items"] count]);
 	if (![menu isKindOfClass: [NSDictionary class]] || !client) return;
 	[appMenus setObject: menu forKey: client];
+	if (!frontClient && frontWindowId) {
+		NSString *c = [self resolveClientForPid: 0 window: frontWindowId wmClass: frontWMClass];
+		if (c) frontClient = [c retain];
+	}
 	if ([client isEqualToString: frontClient]) [self refreshIfNotTracking];
 }
 

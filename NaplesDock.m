@@ -2,7 +2,6 @@
 #import "NaplesDockView.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
-#include <sys/sysctl.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -59,22 +58,6 @@ bundleOfExecutable(NSString *exe)
 		if ([[[parts objectAtIndex: i] pathExtension] isEqualToString: @"app"])
 			return [NSString pathWithComponents: [parts subarrayWithRange: NSMakeRange(0, i + 1)]];
 	return nil;
-}
-
-/* the executable path of a process: KERN_PROCARGS2 starts with argc, then the exec path (libproc is not in this port) */
-static NSString *
-executableOfPid(int pid)
-{
-	int mib[3] = { CTL_KERN, KERN_PROCARGS2, pid };
-	size_t len = 0;
-	char *buf;
-	NSString *s = nil;
-	if (sysctl(mib, 3, NULL, &len, NULL, 0) < 0 || len <= sizeof(int)) return nil;
-	buf = malloc(len);
-	if (sysctl(mib, 3, buf, &len, NULL, 0) == 0 && len > sizeof(int))
-		s = [NSString stringWithUTF8String: buf + sizeof(int)];
-	free(buf);
-	return s;
 }
 
 @implementation NaplesDock
@@ -207,7 +190,7 @@ executableOfPid(int pid)
 {
 	NSString *p = nil, *k, *exe;
 	*bundle = nil;
-	if (w->pid > 0 && (exe = executableOfPid(w->pid))) p = bundleOfExecutable(exe);
+	if (w->pid > 0 && (exe = NaplesExecutableOfPid(w->pid))) p = bundleOfExecutable(exe);
 	if (!p && w->pid > 0)
 		for (k in launched) if ([[launched objectForKey: k] intValue] == w->pid) { p = k; break; }
 	if (!p && [w->wmClass length]) {
@@ -304,7 +287,25 @@ executableOfPid(int pid)
 
 - (void) menuChanged { [self relayout]; }
 
+- (void) reshapeLater: (NSArray *)rects
+{
+	/* the shape can be lost when the window is resized; reapply it once the resize has settled (no relayout: that would loop) */
+	[[NaplesX shared] setShape: [self xid] rects: rects radius: 5];
+}
+
+- (void) holdLayout: (BOOL)hold
+{
+	layoutHold = hold;
+	if (!hold && layoutDeferred) { layoutDeferred = NO; [self relayout]; }
+}
+
 - (void) relayout
+{
+	if (layoutHold) { layoutDeferred = YES; return; }
+	[self relayoutNow];
+}
+
+- (void) relayoutNow
 {
 	NSRect scr = [[NSScreen mainScreen] frame], bar, menu = NSZeroRect, frame;
 	NSSize bs;
@@ -336,8 +337,10 @@ executableOfPid(int pid)
 	barLocal = NSMakePoint(bar.origin.x - frame.origin.x, bar.origin.y - frame.origin.y);
 	if ([view menuOpen]) menuLocal = NSMakePoint(menu.origin.x - frame.origin.x, menu.origin.y - frame.origin.y);
 
-	[window setFrame: frame display: NO];
-	[view setFrame: NSMakeRect(0, 0, frame.size.width, frame.size.height)];
+	if (!NSEqualRects(frame, [window frame])) {
+		[window setFrame: frame display: NO];
+		[view setFrame: NSMakeRect(0, 0, frame.size.width, frame.size.height)];
+	}
 	[view setBarOrigin: barLocal menuOrigin: menuLocal];
 
 	r = [view barRect];	/* shape rects are in X coordinates: origin at the window's top left */
@@ -354,6 +357,8 @@ executableOfPid(int pid)
 		}
 	}
 	[[NaplesX shared] setShape: [self xid] rects: shape radius: 5];
+	[NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(reshapeLater:) object: nil];
+	[self performSelector: @selector(reshapeLater:) withObject: [[shape copy] autorelease] afterDelay: 0.15];
 	[self applyHints: [self xid]];
 	[view setNeedsDisplay: YES];
 }

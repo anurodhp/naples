@@ -52,6 +52,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 	BOOL trashFull;
 	NSString *milanPath;
 	dispatch_source_t trashSource;
+	BOOL layoutHold, layoutDeferred;	/* no window changes while a drag session runs in the view */
 	NSRect backdropRect;	/* X coordinates of the bar the current backdrop was cut for */
 }
 - (void) start;
@@ -72,6 +73,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 - (void) openFile: (NSString *)file withItem: (NaplesItem *)item;
 
 /* Geometry hooks used by the view. */
+- (void) holdLayout: (BOOL)hold;	/* defer relayout (window moves, resizes, reshapes) until released */
 - (void) relayout;	/* re-measure the view and move/resize/shape the window */
 - (void) menuChanged;	/* the view opened or closed its menu overlay: the window must grow or shrink */
 @end

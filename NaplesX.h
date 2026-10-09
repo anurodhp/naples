@@ -35,6 +35,12 @@
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius;
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius square: (NSUInteger)square;
 - (BOOL) hasCompositor;
+/* Naples' own windows: left out of clientWindows and their property changes are not events (writing our own hints must
+ * never wake us). GNUstep windows carry no _NET_WM_PID, so they cannot be told apart by process. */
+- (void) registerOwnWindow: (unsigned long)xid;
+/* GNUstep windows carry no _NET_WM_PID; the menu bar learns window -> process from the menu clients and answers here. */
+- (void) setPidResolver: (int (^)(unsigned long xid))resolver;
+- (void) noteWindowsChanged;	/* runs the change handler (a window's process became known) */
 /* Pseudo-transparency (no compositor on this stack): the desktop wallpaper under a screen rectangle (top-left origin),
  * from the root pixmap Milan publishes in _XROOTPMAP_ID. nil if there is none. */
 - (NSImage *) backgroundForRect: (NSRect)xRect;
@@ -47,3 +53,4 @@
 BOOL NaplesEnsureWMTakeover(void);
 
 void NaplesRunOnMain(void (^block)(void));
+NSString *NaplesExecutableOfPid(int pid);	/* sysctl KERN_PROCARGS2; nil if unknown */

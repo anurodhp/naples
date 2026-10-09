@@ -221,7 +221,17 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 
 - (void) drawIconOf: (NaplesItem *)it inRect: (NSRect)r alpha: (CGFloat)alpha
 {
-	if (it->kind == NaplesItemTrash) { drawTrash(r, it->trashFull, alpha); return; }
+	if (it->kind == NaplesItemTrash) {	/* the same artwork Milan uses: the theme's empty / full recycler */
+		NSImage *ti = [NSImage imageNamed: it->trashFull ? @"common_RecyclerFull" : @"common_RecyclerEmpty"];
+		if (ti) {
+			NSRect src = NSZeroRect;
+			src.size = [ti size];
+			[ti drawInRect: r fromRect: src operation: NSCompositeSourceOver fraction: alpha];
+		} else {
+			drawTrash(r, it->trashFull, alpha);	/* no theme image: the drawn can, with paper when full */
+		}
+		return;
+	}
 	if (it->icon) {
 		NSRect src = NSZeroRect;
 		src.size = [it->icon size];
@@ -487,6 +497,7 @@ edgeForPoint(NSPoint p)
 	[pb declareTypes: [NSArray arrayWithObject: NaplesPboardType] owner: nil];
 	[pb setString: it->path forType: NaplesPboardType];
 	dragging = YES; dragSource = i;
+	[dock holdLayout: YES];	/* the window must not move or resize under the drag session */
 	[self setNeedsDisplay: YES];
 	[self dragImage: img at: r.origin offset: NSZeroSize event: e pasteboard: pb source: self slideBack: NO];
 }
@@ -507,6 +518,7 @@ edgeForPoint(NSPoint p)
 	 * as a running item). The operation GNUstep reports is not used: it is None or stale depending on the last target. */
 	if (it && it->pinned && !handled && !NSPointInRect(pointer, NSInsetRect(winBar, -6, -6)))
 		[dock unpinPath: it->path];
+	[dock holdLayout: NO];
 	[self setNeedsDisplay: YES];
 }
 
@@ -564,6 +576,8 @@ done:
 	[self setNeedsDisplay: YES];
 	if (op == NSDragOperationNone) return NO;
 	dropHandled = YES;
+	[dock holdLayout: YES];
+	if (!dragging) NaplesRunOnMain(^{ [dock holdLayout: NO]; });	/* drags from elsewhere: after the drag machinery has returned; our own end in finishDrag */
 	if (trash) {
 		if (internal) [dock unpinPath: [files objectAtIndex: 0]];
 		else [dock trashPaths: files];

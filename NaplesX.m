@@ -5,6 +5,7 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/shape.h>
 #include <unistd.h>
+#include <sys/sysctl.h>
 #include <math.h>
 
 @interface NaplesBlockBox : NSObject { void (^block)(void); }
@@ -45,8 +46,11 @@ ignoreXError(Display *d, XErrorEvent *e)
 	dispatch_source_t readSource;
 	void (^changeHandler)(void);
 	void (^activeHandler)(void);
+	int (^pidResolver)(unsigned long);
 	NSMutableArray *backgroundHandlers;
 	NSMutableSet *selected;	/* windows we already listen to */
+	NSMutableSet *own;	/* Naples' own windows */
+	NSMutableDictionary *hinted;	/* own window -> the strut last written */
 	struct {
 		Atom clientList, wmState, netWmState, name, netName, utf8, pid, windowType, typeNormal, typeDialog,
 		     activeWindow, rootPmap, closeWindow, strutPartial, strut, opacity, skipTaskbar, sticky, above, desktop, cm;
@@ -67,6 +71,8 @@ ignoreXError(Display *d, XErrorEvent *e)
 	if (!(dpy = XOpenDisplay(NULL))) return NO;
 	root = DefaultRootWindow(dpy);
 	selected = [[NSMutableSet alloc] init];
+	own = [[NSMutableSet alloc] init];
+	hinted = [[NSMutableDictionary alloc] init];
 #define ATOM(f, n) a.f = XInternAtom(dpy, n, False)
 	ATOM(clientList, "_NET_CLIENT_LIST"); ATOM(wmState, "WM_STATE"); ATOM(netWmState, "_NET_WM_STATE");
 	ATOM(name, "WM_NAME"); ATOM(netName, "_NET_WM_NAME"); ATOM(utf8, "UTF8_STRING"); ATOM(pid, "_NET_WM_PID");
@@ -118,23 +124,34 @@ ignoreXError(Display *d, XErrorEvent *e)
 	pix = v[0];
 	XFree(v);
 	if (!pix || !(xi = XGetImage(dpy, pix, x, y, w, h, AllPlanes, ZPixmap))) return nil;
-	if (xi->bits_per_pixel != 32 || xi->red_mask != 0xff0000 || xi->green_mask != 0xff00 || xi->blue_mask != 0xff || xi->byte_order != LSBFirst) {
+	/* a Pixmap's XImage has no colour masks (they are zero); Milan stores 0x00RRGGBB, little-endian, 24 or 32 bits */
+	if ((xi->bits_per_pixel != 32 && xi->bits_per_pixel != 24) || xi->byte_order != LSBFirst ||
+	    (xi->red_mask && (xi->red_mask != 0xff0000 || xi->green_mask != 0xff00 || xi->blue_mask != 0xff))) {
 		XDestroyImage(xi);
 		return nil;
 	}
 	rep = [[[NSBitmapImageRep alloc] initWithBitmapDataPlanes: NULL pixelsWide: w pixelsHigh: h bitsPerSample: 8 samplesPerPixel: 3
 	                                                 hasAlpha: NO isPlanar: NO colorSpaceName: NSCalibratedRGBColorSpace
 	                                              bytesPerRow: 0 bitsPerPixel: 24] autorelease];
+	int bytes = xi->bits_per_pixel / 8;
 	for (row = 0; row < h; row++) {
 		const unsigned char *s = (const unsigned char *)xi->data + (size_t)row * xi->bytes_per_line;
 		unsigned char *d = [rep bitmapData] + (size_t)row * [rep bytesPerRow];
-		for (col = 0; col < w; col++, s += 4, d += 3) { d[0] = s[2]; d[1] = s[1]; d[2] = s[0]; }
+		for (col = 0; col < w; col++, s += bytes, d += 3) { d[0] = s[2]; d[1] = s[1]; d[2] = s[0]; }
 	}
 	XDestroyImage(xi);
 	img = [[[NSImage alloc] initWithSize: NSMakeSize(w, h)] autorelease];
 	[img addRepresentation: rep];
 	return img;
 }
+
+- (void) setPidResolver: (int (^)(unsigned long))r
+{
+	Block_release(pidResolver);
+	pidResolver = r ? Block_copy(r) : nil;
+}
+
+- (void) noteWindowsChanged { if (changeHandler) changeHandler(); }
 
 - (void) setActiveHandler: (void (^)(void))h
 {
@@ -149,6 +166,12 @@ ignoreXError(Display *d, XErrorEvent *e)
 	while (XPending(dpy)) {
 		XNextEvent(dpy, &ev);
 		if (ev.type != PropertyNotify) continue;
+		if ([own containsObject: [NSNumber numberWithUnsignedLong: ev.xproperty.window]]) continue;
+		if ([[NSUserDefaults standardUserDefaults] boolForKey: @"NaplesDebug"]) {
+			char *an = XGetAtomName(dpy, ev.xproperty.atom);
+			NSLog(@"Naples X: PropertyNotify win 0x%lx %s", ev.xproperty.window, an ? an : "?");
+			if (an) XFree(an);
+		}
 		if (ev.xproperty.window == root) {
 			if (ev.xproperty.atom == a.clientList) changed = YES;
 			if (ev.xproperty.atom == a.activeWindow) activeChanged = YES;
@@ -220,6 +243,7 @@ ignoreXError(Display *d, XErrorEvent *e)
 	info->xid = w;
 	if ((v = [self longs: a.pid of: w type: XA_CARDINAL count: &m])) { info->pid = (int)v[0]; XFree(v); }
 	if ((v = [self longs: a.wmState of: w type: AnyPropertyType count: &m])) { info->minimized = (v[0] == IconicState); XFree(v); }
+	if (info->pid <= 0 && pidResolver) info->pid = pidResolver(w);
 	info->title = [[self text: a.netName of: w] retain];
 	if (!info->title) info->title = [[self text: a.name of: w] retain];
 	if (XGetClassHint(dpy, w, &ch)) {
@@ -249,6 +273,7 @@ ignoreXError(Display *d, XErrorEvent *e)
 	for (i = 0; list && i < n; i++) {
 		Window w = list[i];
 		NaplesWindowInfo *info;
+		if ([own containsObject: [NSNumber numberWithUnsignedLong: w]]) continue;
 		if (![selected containsObject: [NSNumber numberWithUnsignedLong: w]]) {
 			XSelectInput(dpy, w, PropertyChangeMask);
 			[selected addObject: [NSNumber numberWithUnsignedLong: w]];
@@ -295,6 +320,13 @@ ignoreXError(Display *d, XErrorEvent *e)
 	return dpy && XGetSelectionOwner(dpy, a.cm) != None;
 }
 
+- (void) registerOwnWindow: (unsigned long)xid
+{
+	NSNumber *k = [NSNumber numberWithUnsignedLong: xid];
+	[own addObject: k];
+	if ([selected containsObject: k]) { XSelectInput(dpy, xid, 0); [selected removeObject: k]; }
+}
+
 - (void) setDockHints: (unsigned long)xid edge: (int)edge barRect: (NSRect)bar reserve: (BOOL)reserve opacity: (double)opacity
 {
 	Window w = xid;
@@ -303,13 +335,17 @@ ignoreXError(Display *d, XErrorEvent *e)
 	unsigned long strut[12] = { 0 };
 	unsigned long all = 0xFFFFFFFFul;
 	int sw = DisplayWidth(dpy, DefaultScreen(dpy)), sh = DisplayHeight(dpy, DefaultScreen(dpy));
+	NSNumber *key = [NSNumber numberWithUnsignedLong: xid];
 	if (!dpy || !w) return;
-	XChangeProperty(dpy, w, a.windowType, XA_ATOM, 32, PropModeReplace, (unsigned char *)&dock, 1);
-	XChangeProperty(dpy, w, a.netWmState, XA_ATOM, 32, PropModeReplace, (unsigned char *)states, 2);
-	XChangeProperty(dpy, w, a.desktop, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&all, 1);
-	if (opacity < 1.0) {
-		unsigned long o = (unsigned long)(opacity * 0xFFFFFFFFul);
-		XChangeProperty(dpy, w, a.opacity, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&o, 1);
+	[self registerOwnWindow: xid];
+	if (![hinted objectForKey: key]) {	/* the type, state and desktop once: the window manager reacts to every change of them */
+		XChangeProperty(dpy, w, a.windowType, XA_ATOM, 32, PropModeReplace, (unsigned char *)&dock, 1);
+		XChangeProperty(dpy, w, a.netWmState, XA_ATOM, 32, PropModeReplace, (unsigned char *)states, 2);
+		XChangeProperty(dpy, w, a.desktop, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&all, 1);
+		if (opacity < 1.0) {
+			unsigned long o = (unsigned long)(opacity * 0xFFFFFFFFul);
+			XChangeProperty(dpy, w, a.opacity, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&o, 1);
+		}
 	}
 	if (reserve) {	/* left, right, top, bottom, then the start/end of each strip */
 		if (edge == 3) { strut[2] = bar.origin.y + bar.size.height; strut[8] = bar.origin.x; strut[9] = bar.origin.x + bar.size.width; }
@@ -317,8 +353,14 @@ ignoreXError(Display *d, XErrorEvent *e)
 		else if (edge == 2) { strut[1] = sw - bar.origin.x; strut[6] = bar.origin.y; strut[7] = bar.origin.y + bar.size.height; }
 		else { strut[3] = sh - bar.origin.y; strut[10] = bar.origin.x; strut[11] = bar.origin.x + bar.size.width; }
 	}
-	XChangeProperty(dpy, w, a.strutPartial, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)strut, 12);
-	XChangeProperty(dpy, w, a.strut, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)strut, 4);
+	{	/* the strut only when it changed */
+		NSData *sd = [NSData dataWithBytes: strut length: sizeof strut];
+		if (![[hinted objectForKey: key] isEqual: sd]) {
+			XChangeProperty(dpy, w, a.strutPartial, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)strut, 12);
+			XChangeProperty(dpy, w, a.strut, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)strut, 4);
+			[hinted setObject: sd forKey: key];
+		}
+	}
 	XFlush(dpy);
 }
 
@@ -381,4 +423,20 @@ NaplesEnsureWMTakeover(void)
 	[d setObject: @"YES" forKey: @"DisableMiniwindows"];
 	[[NSFileManager defaultManager] createDirectoryAtPath: dir withIntermediateDirectories: YES attributes: nil error: NULL];
 	return [d writeToFile: file atomically: YES];
+}
+
+/* the executable path of a process: KERN_PROCARGS2 starts with argc, then the exec path (libproc is not in this port) */
+NSString *
+NaplesExecutableOfPid(int pid)
+{
+	int mib[3] = { CTL_KERN, KERN_PROCARGS2, pid };
+	size_t len = 0;
+	char *buf;
+	NSString *s = nil;
+	if (pid <= 0 || sysctl(mib, 3, NULL, &len, NULL, 0) < 0 || len <= sizeof(int)) return nil;
+	buf = malloc(len);
+	if (sysctl(mib, 3, buf, &len, NULL, 0) == 0 && len > sizeof(int))
+		s = [NSString stringWithUTF8String: buf + sizeof(int)];
+	free(buf);
+	return s;
 }
