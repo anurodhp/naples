@@ -124,7 +124,7 @@ ignoreXError(Display *d, XErrorEvent *e)
 	pix = v[0];
 	XFree(v);
 	if (!pix || !(xi = XGetImage(dpy, pix, x, y, w, h, AllPlanes, ZPixmap))) return nil;
-	/* a Pixmap's XImage has no colour masks (they are zero); Milan stores 0x00RRGGBB, little-endian, 24 or 32 bits */
+	/* a Pixmap's XImage has no color masks (they are zero); Milan stores 0x00RRGGBB, little-endian, 24 or 32 bits */
 	if ((xi->bits_per_pixel != 32 && xi->bits_per_pixel != 24) || xi->byte_order != LSBFirst ||
 	    (xi->red_mask && (xi->red_mask != 0xff0000 || xi->green_mask != 0xff00 || xi->blue_mask != 0xff))) {
 		XDestroyImage(xi);

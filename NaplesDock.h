@@ -52,6 +52,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 	BOOL trashFull;
 	NSString *milanPath;
 	dispatch_source_t trashSource;
+	NSDictionary *lastScan;	/* bundle -> pids from the last process scan */
 	BOOL layoutHold, layoutDeferred;	/* no window changes while a drag session runs in the view */
 	NSRect backdropRect;	/* X coordinates of the bar the current backdrop was cut for */
 }

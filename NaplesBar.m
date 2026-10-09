@@ -304,7 +304,7 @@ pidOfClient(NSString *client)
 	    @"A dock and global menu bar for GNUstep and Window Maker.", @"ApplicationDescription",
 	    [ver length] ? ver : @"0.3", @"ApplicationRelease",
 	    [NSArray arrayWithObject: @"Anurodh Pokharel"], @"Authors",
-	    @"Copyright \u00a9 2026 Anurodh Pokharel. MIT licence.", @"Copyright",
+	    @"Copyright \u00a9 2026 Anurodh Pokharel. MIT license.", @"Copyright",
 	    @"Hexley DarwinOS Mascot Copyright 2000 by Jon Hooper. All Rights Reserved.", @"CopyrightDescription",
 	    nil];
 	[NSApp orderFrontStandardAboutPanelWithOptions: opts];

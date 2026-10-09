@@ -35,7 +35,7 @@ uses the same panels.
 Start Naples before the other apps (the session autostart): Eau looks the server up when it starts and retries every
 30 s. An app that outlives a Naples restart keeps a dead connection until its next push, so Naples asks every process for
 its menu one second after it starts (`requestApplicationMenuUpdate`), which makes Eau reconnect. Apps that are not GNUstep/Eau show just their name. The Hexley art is (c) 2000 Jon Hooper, all rights reserved,
-bundled under its own licence as in Milan (`../milan/icons/app/README.md`), not under the MIT licence.
+bundled under its own license as in Milan (`../milan/icons/app/README.md`), not under the MIT license.
 
 ## How the pieces use XNU / GCD
 

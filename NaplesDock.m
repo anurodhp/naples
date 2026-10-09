@@ -2,6 +2,7 @@
 #import "NaplesDockView.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
+#include <sys/sysctl.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -60,6 +61,33 @@ bundleOfExecutable(NSString *exe)
 	return nil;
 }
 
+/* Every process whose executable lives in an .app bundle: bundle path -> NSNumber pids. Running state for apps that have no
+ * normal window (Milan drawing the desktop, anything started outside the dock). */
+static NSDictionary *
+scanBundleProcesses(void)
+{
+	int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+	size_t len = 0, i, n;
+	struct kinfo_proc *procs;
+	NSMutableDictionary *out = [NSMutableDictionary dictionary];
+	if (sysctl(mib, 4, NULL, &len, NULL, 0) < 0 || !len) return out;
+	procs = malloc(len);
+	if (sysctl(mib, 4, procs, &len, NULL, 0) == 0) {
+		n = len / sizeof *procs;
+		for (i = 0; i < n; i++) {
+			pid_t pid = procs[i].kp_proc.p_pid;
+			NSString *exe, *bundle;
+			NSMutableArray *list;
+			if (pid <= 1 || pid == getpid()) continue;
+			if (!(exe = NaplesExecutableOfPid(pid)) || !(bundle = bundleOfExecutable(exe))) continue;
+			if (!(list = [out objectForKey: bundle])) { list = [NSMutableArray array]; [out setObject: list forKey: bundle]; }
+			[list addObject: [NSNumber numberWithInt: pid]];
+		}
+	}
+	free(procs);
+	return out;
+}
+
 @implementation NaplesDock
 
 /* ---- setup ---- */
@@ -106,6 +134,8 @@ bundleOfExecutable(NSString *exe)
 	[[NaplesX shared] setChangeHandler: ^{ [self rebuild]; }];
 	[[NaplesX shared] addBackgroundHandler: ^{ backdropRect = NSZeroRect; [self relayout]; }];
 	[self watchTrash];
+	/* programs started outside the dock come and go without X events: look again every 3 s and rebuild if the set changed */
+	[NSTimer scheduledTimerWithTimeInterval: 3.0 target: self selector: @selector(rescan:) userInfo: nil repeats: YES];
 
 	view = [[NaplesDockView alloc] initWithDock: self];
 	window = [[NaplesDockWindow alloc] initWithContentRect: NSMakeRect(0, 0, 100, 60) styleMask: NSBorderlessWindowMask
@@ -147,6 +177,12 @@ bundleOfExecutable(NSString *exe)
 }
 
 /* ---- the item list ---- */
+
+- (void) rescan: (NSTimer *)t
+{
+	NSDictionary *now = scanBundleProcesses();
+	if (![now isEqual: lastScan]) [self rebuild];
+}
 
 - (NSArray *) items { return items; }
 - (int) edge { return edge; }
@@ -256,6 +292,20 @@ bundleOfExecutable(NSString *exe)
 			NSNumber *n = [launched objectForKey: k];
 			if (![it->pids containsObject: n]) [it->pids addObject: n];
 		}
+	}
+
+	/* processes of the same bundle that have no window of ours to show (Milan drawing the desktop) are still running */
+	{
+		NSDictionary *procs = scanBundleProcesses();
+		NSString *b;
+		for (b in procs) {
+			NaplesItem *bi = [byKey objectForKey: b];
+			NSNumber *pn;
+			if (!bi || bi == nil) continue;
+			for (pn in [procs objectForKey: b])
+				if (![bi->pids containsObject: pn]) [bi->pids addObject: pn];
+		}
+		[lastScan release]; lastScan = [procs retain];
 	}
 
 	/* running programs that are not pinned, in the order they appeared */
@@ -413,7 +463,8 @@ bundleOfExecutable(NSString *exe)
 			if (!pick) for (w in item->windows) if (!w->transient) { pick = w; break; }
 			if (!pick) pick = [item->windows lastObject];
 			[[NaplesX shared] activateWindow: pick->xid];
-		} else if (![item running] && item->path) {
+		} else if (item->path && item->launchStart <= 0) {
+			/* not running, or running with no window to raise (Milan drawing the desktop): start a new instance, which opens one */
 			[self launch: item->path file: nil arguments: nil];
 		}
 		break;
