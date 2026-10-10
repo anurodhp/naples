@@ -25,7 +25,7 @@
 - Apps that are not GNUstep apps running the Eau theme show only their name in the menu bar; they cannot push a menu.
 - Naples must be started before the other apps. An app that outlives a Naples restart is asked for its menu again, but reconnection depends on Eau.
 - No Spaces, no window previews on minimized items, no badges or bouncing icons.
-- Restart and Shut Down rely on iokit's session script (gsdm Xsession) reading `~/.session-request`; without it only Log Out works.
+- Restart and Shut Down rely on iokit's session script (gsdm Xsession) reading `$HOME/.session-request`; without it only Log Out works.
 - Darwin only (it uses `sysctl`, `kinfo_proc` and kqueue). It does not build on Linux.
 - Building needs a Mac and the iokit toolchain. There is no prebuilt package.
 
@@ -38,7 +38,7 @@ Naples draws the bar and the dock as borderless X windows from AppKit, and reads
 - Running state: `_NET_CLIENT_LIST` + `WM_STATE`, plus a process scan for apps with no normal window; a window's process and bundle come from `sysctl(KERN_PROCARGS2)`.
 - Children Naples starts are watched with `DISPATCH_SOURCE_TYPE_PROC` (kqueue `EVFILT_PROC`/`NOTE_EXIT`).
 - The Trash can fills/empties from a `DISPATCH_SOURCE_TYPE_VNODE` source on `~/.Trash`; moves to the Trash run on a global queue.
-- Log Out asks open applications to close their windows, then ends Window Maker (which is the session). Restart and Shut Down first leave a request in `~/.session-request` for the session script, which turns it into the exit status gsdm acts on.
+- Log Out asks open applications to close their windows, then ends Window Maker (which is the session). Restart and Shut Down first leave a request in `$HOME/.session-request` (the session's HOME, not GNUstep's home folder, which for root is `/`) for the session script, which turns it into the exit status gsdm acts on.
 
 ## Menu bar
 

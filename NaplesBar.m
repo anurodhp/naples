@@ -334,8 +334,15 @@ pidOfClient(NSString *client)
 {
 	NaplesWindowInfo *w;
 	if (kind != NaplesPowerLogOut) {
-		NSString *file = [NSHomeDirectory() stringByAppendingPathComponent: @".session-request"];
-		[(kind == NaplesPowerRestart ? @"restart\n" : @"shutdown\n") writeToFile: file atomically: YES encoding: NSUTF8StringEncoding error: NULL];
+		/* the session script reads "$HOME/.session-request". Not NSHomeDirectory(): GNUstep takes that from the passwd entry
+		 * (NSPathUtilities.m NSHomeDirectoryForUser), which for root is "/", while the script runs with HOME=/var/root. */
+		const char *h = getenv("HOME");
+		NSString *home = h && *h ? [NSString stringWithUTF8String: h] : NSHomeDirectory();
+		NSString *file = [home stringByAppendingPathComponent: @".session-request"];
+		if (![(kind == NaplesPowerRestart ? @"restart\n" : @"shutdown\n") writeToFile: file atomically: YES encoding: NSUTF8StringEncoding error: NULL]) {
+			NSLog(@"Naples: could not write %@; not ending the session", file);	/* it would only log out */
+			return;
+		}
 	}
 	for (w in [[NaplesX shared] clientWindows]) [[NaplesX shared] closeWindow: w->xid];	/* let applications save and quit */
 	[self performSelector: @selector(endSession) withObject: nil afterDelay: 2.5];
