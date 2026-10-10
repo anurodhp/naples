@@ -1,9 +1,10 @@
 #import "NaplesBarView.h"
 #import "NaplesBar.h"
 #import "NaplesPanel.h"
+#import "NaplesSound.h"
 #include <time.h>
 
-enum { BarH = 22, Radius = 5, TitlesX = 44 };
+enum { BarH = 22, Radius = 5, TitlesX = 44, SpeakerW = 20, SpeakerPad = 5 };
 
 static BOOL
 isSep(NSDictionary *item)
@@ -192,16 +193,29 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	clock = [NSString stringWithUTF8String: buf];
 	cs = [clock sizeWithAttributes: ca];
 	[clock drawAtPoint: NSMakePoint(bounds.size.width - cs.width - 12, barR.origin.y + 4) withAttributes: ca];
+
+	speakerRect = NSZeroRect;
+	if ([[bar sound] known]) {	/* the volume, left of the clock: the waves follow the level */
+		NaplesSound *s = [bar sound];
+		CGFloat sx = bounds.size.width - cs.width - 12 - 10 - SpeakerW;
+		NSRect hr;
+		speakerRect = NSMakeRect(sx - SpeakerPad, 0, SpeakerW + 2 * SpeakerPad, BarH);
+		hr = NSMakeRect(speakerRect.origin.x, barR.origin.y, speakerRect.size.width, BarH);
+		if ([s panelShowing]) { [[NSColor colorWithCalibratedWhite: 0 alpha: 0.14] set]; NSRectFill(hr); }
+		NaplesDrawSpeaker(NSMakeRect(sx, NSMidY(hr) - 7, SpeakerW, 14), NaplesSpeakerWaves([s volume], [s muted]), [s muted],
+		                  [NSColor colorWithCalibratedWhite: 0.08 alpha: 1]);
+	}
 }
 
 /* ---- the bar's own mouse handling ---- */
 
-/* -1 nothing, -2 Hexley, else the item index of the title under p */
+/* -1 nothing, -2 Hexley, -3 the speaker, else the item index of the title under p */
 - (NSInteger) barHit: (NSPoint)p
 {
 	NSUInteger k;
 	if (p.y < [self bounds].size.height - BarH) return -1;
 	if (p.x >= hexleyRect.origin.x && p.x < NSMaxX(hexleyRect)) return -2;
+	if (speakerRect.size.width && p.x >= speakerRect.origin.x && p.x < NSMaxX(speakerRect)) return -3;
 	for (k = 0; k < [titleRects count]; k++) {
 		NSRect r = [[titleRects objectAtIndex: k] rectValue];
 		if (p.x >= r.origin.x && p.x < NSMaxX(r)) return [[titleIdx objectAtIndex: k] integerValue];
@@ -215,6 +229,7 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	[chain removeAllObjects];
 	hoverLevel = hoverRow = -1;
 	openTop = t;
+	if (t != -1) [[bar sound] hidePanel];
 	if (t != -1) [bar prepareMenu];	/* fresh enabled/checked state from the application, as it is about to be shown */
 	[self refreshPanels];
 	[self setNeedsDisplay: YES];
@@ -232,6 +247,11 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 - (void) mouseDown: (NSEvent *)e
 {
 	NSInteger b = [self barHit: [self convertPoint: [e locationInWindow] fromView: nil]];
+	if (b == -3) {	/* the speaker: the Sound panel hangs under it (screen x of the bar is the view's x) */
+		[self closeMenu];
+		[[bar sound] togglePanelUnder: speakerRect];
+		return;
+	}
 	if (b == -1) { [self closeMenu]; return; }
 	if (b == openTop) [self closeMenu];
 	else [self openTopItem: b];
@@ -242,7 +262,7 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	NSInteger b;
 	if (openTop == -1) return;
 	b = [self barHit: [self convertPoint: [e locationInWindow] fromView: nil]];
-	if (b != -1 && b != openTop) [self openTopItem: b];	/* sliding along the bar switches menus */
+	if (b != -1 && b != -3 && b != openTop) [self openTopItem: b];	/* sliding along the bar switches menus */
 }
 
 - (void) mouseEntered: (NSEvent *)e { [NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(closeMenu) object: nil]; }

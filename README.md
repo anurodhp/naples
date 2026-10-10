@@ -1,4 +1,4 @@
-<p align="center"><img src="doc/header.png" alt="Naples running on a Raspberry Pi 3 under Darwin: the dock along the bottom and the menu bar across the top" width="100%"></p>
+<p align="center"><img src="doc/header.png" alt="Naples running on a Raspberry Pi 3 under Darwin: the dock along the bottom, the menu bar across the top with the Sound panel open" width="100%"></p>
 
 # Naples
 
@@ -15,7 +15,9 @@
 - Drop files on the Trash to move them to `~/.Trash` (Put Back info in Milan's `.milan-origins` format).
 - Maximized windows stop at the dock (it reserves its strip with `_NET_WM_STRUT_PARTIAL`).
 
-**Menu bar** across the top: a Hexley head at the far left, the frontmost app's menus, and the date and time at the far right. The Hexley menu has About Naples, Open Milan, dock position, **Log Out, Restart and Shut Down** (each asks first), and Quit Naples.
+**Menu bar** across the top: a Hexley head at the far left, the frontmost app's menus, and the volume and the date and time at the far right. The Hexley menu has About Naples, Open Milan, dock position, **Log Out, Restart and Shut Down** (each asks first), and Quit Naples.
+
+**Volume**: a speaker left of the clock whose waves (none to three) follow the volume. Click it for a small Sound panel with a slider. It sets the device volume of iokit's audio daemon `audiod`, which keeps it across restarts; without audio on the image the speaker is not shown.
 
 ## What you cannot do (yet)
 
@@ -32,6 +34,7 @@
 Naples draws the bar and the dock as borderless X windows from AppKit, and reads the window manager's EWMH state over a GCD source on the X connection.
 
 - The clock redraws on a wall-clock-aligned `DISPATCH_SOURCE_TYPE_TIMER`.
+- The volume goes through the CoreAudio HAL calls of `/usr/lib/libaudiohal.dylib` (opened with `dlopen`), on a serial GCD queue: each call is a Mach RPC to `audiod`. The library has no property listeners, so a volume another program sets shows when the Sound panel is next opened.
 - Running state: `_NET_CLIENT_LIST` + `WM_STATE`, plus a process scan for apps with no normal window; a window's process and bundle come from `sysctl(KERN_PROCARGS2)`.
 - Children Naples starts are watched with `DISPATCH_SOURCE_TYPE_PROC` (kqueue `EVFILT_PROC`/`NOTE_EXIT`).
 - The Trash can fills/empties from a `DISPATCH_SOURCE_TYPE_VNODE` source on `~/.Trash`; moves to the Trash run on a global queue.
@@ -40,7 +43,7 @@ Naples draws the bar and the dock as borderless X windows from AppKit, and reads
 ## Menu bar
 
 A second window across the top (`NaplesBar`): a **Hexley head** at the far left (opens a system menu: About Naples, Open Milan, dock
-position, Quit Naples), the **frontmost app's menu titles** after it, and the **date and time** at the far right. It
+position, Quit Naples), the **frontmost app's menu titles** after it, and the **volume** and the **date and time** at the far right. It
 reserves its strip with a strut. Disable with `-NaplesBar NO`.
 
 It is the server end of the Eau theme's menu protocol (Distributed Objects, `org.gnustep.Gershwin.MenuServer`, see

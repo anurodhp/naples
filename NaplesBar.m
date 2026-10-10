@@ -2,6 +2,7 @@
 #import "NaplesBarView.h"
 #import "NaplesDock.h"
 #import "NaplesPanel.h"
+#import "NaplesSound.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
 #include <sys/sysctl.h>
@@ -85,6 +86,8 @@ localSeparator(void)
 	return self;
 }
 
+- (NaplesSound *) sound { return sound; }
+
 - (NSImage *) hexley
 {
 	if (!loadedHexley) {
@@ -114,6 +117,8 @@ localSeparator(void)
 	[window setReleasedWhenClosed: NO];
 	[window setCanHide: NO];
 	[window setContentView: view];
+	/* the speaker left of the clock; redraw when the volume or the panel changes */
+	sound = [[NaplesSound alloc] initWithChangeHandler: ^{ [view setNeedsDisplay: YES]; }];
 
 	/* the menu server: Eau in every app looks this name up and pushes menus to it */
 	serverConnection = [[NSConnection alloc] init];

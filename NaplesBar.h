@@ -5,7 +5,7 @@
 #import <AppKit/AppKit.h>
 #import "NaplesMenuProtocol.h"
 
-@class NaplesDock, NaplesBarView;
+@class NaplesDock, NaplesBarView, NaplesSound;
 
 enum { NaplesPowerLogOut = 0, NaplesPowerRestart = 1, NaplesPowerShutDown = 2 };
 
@@ -21,6 +21,7 @@ enum { NaplesPowerLogOut = 0, NaplesPowerRestart = 1, NaplesPowerShutDown = 2 };
 	NSString *frontClient, *frontName, *frontWMClass;
 	NSImage *hexleyImage;
 	void *clockSource;
+	NaplesSound *sound;
 	BOOL loadedHexley;
 }
 - (id) initWithDock: (NaplesDock *)d;
@@ -33,6 +34,7 @@ enum { NaplesPowerLogOut = 0, NaplesPowerRestart = 1, NaplesPowerShutDown = 2 };
 - (void) showAbout;	/* About Naples, the standard GNUstep info panel (as Milan's) */
 - (NSDictionary *) systemMenu;	/* the Hexley menu; items carry a "block" */
 - (NSImage *) hexley;
+- (NaplesSound *) sound;	/* the volume control; nil without audio (no libaudiohal) */
 - (void) prepareMenu;	/* ask the application for fresh enabled/checked state before a menu opens */
 - (void) activatePath: (NSArray *)path;
 - (void) viewResized;	/* the view's menu opened, closed or cascaded: resize and re-shape the window */
