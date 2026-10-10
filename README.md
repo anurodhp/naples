@@ -1,22 +1,41 @@
+<p align="center"><img src="doc/header.png" alt="Naples running on a Raspberry Pi 3 under Darwin: the dock along the bottom and the menu bar across the top" width="100%"></p>
+
 # Naples
 
-A Dock for GNUstep + Window Maker on Darwin/XNU (the `iokit` Pi port), companion to [Milan](../milan).
-Pure AppKit + Xlib + libdispatch; no extra libraries beyond the X11 ones the stack already has.
+**A dock and menu bar for a small Darwin desktop.** Naples is the dock and global menu bar for the GNUstep + Window Maker desktop on the Raspberry Pi 3 port of Darwin/XNU (the sibling repository [iokit](https://github.com/anurodhp/xnu-iokit-pi3)). It is a companion to [Milan](https://github.com/anurodhp/milan), the file manager and desktop. Pure AppKit + Xlib + libdispatch; no libraries beyond the X11 ones the stack already has.
 
-- **Bottom bar** (drag the bar's background to the left or right edge to move it; the choice persists).
-  Left to right: **Milan** (fixed), your **pinned apps**, a divider, **running programs** that are not pinned,
-  **minimized windows**, **Trash** (fixed).
-- Rest the pointer on an icon for half a second and its name appears (a small label panel; NSView tool tips need a window this stack does not paint).
-- Click an app to start it; click a running one to bring its window forward (un-minimizing it). A **white dot**
-  marks running apps (on the screen-edge side of the icon).
-- **Long click** (0.5 s) or right-click: menu with Show / **Quit** (SIGTERM) / **Force Quit** (SIGKILL), Keep in Dock /
-  Remove from Dock. On the Trash: Open / Empty. On a minimized window: Restore / Close. On the bar: move, Quit Naples.
-- **Drag** `.app` bundles in from Milan, drag icons to reorder, drag an icon off the dock to remove it. Dropping files
-  on the Trash moves them to `~/.Trash` (Put Back info in Milan's `.milan-origins` format); dropping a document on an
-  app icon opens it with that app.
-- Transparent bar with 5px corners: the corners are an XShape mask (works without a compositor); the fill is drawn
-  translucent and `_NET_WM_WINDOW_OPACITY` is set, so real see-through needs an alpha-capable window or a compositor.
-- Reserves its strip with `_NET_WM_STRUT_PARTIAL` so maximized windows stop at the dock (`NaplesReserveSpace NO` to disable).
+## What you can do
+
+**Dock** (bottom by default; drag the bar's background to the left or right edge and the choice persists). Left to right: **Milan** (fixed), your **pinned apps**, a divider, **running programs** that are not pinned, **minimized windows**, **Trash** (fixed).
+
+- Click an app to start it; click a running one to bring its window forward (un-minimizing it). A white dot marks running apps, including ones with no normal window (such as Milan drawing the desktop).
+- Rest the pointer on an icon for half a second to see its name.
+- Long click (0.5 s) or right-click for a menu: Show / Quit (SIGTERM) / Force Quit (SIGKILL), Keep in Dock / Remove from Dock. On the Trash: Open / Empty. On a minimized window: Restore / Close. On the bar: move, Quit Naples.
+- Drag `.app` bundles in from Milan, drag icons to reorder, drag an icon off the dock to remove it. Drop a document on an app icon to open it with that app.
+- Drop files on the Trash to move them to `~/.Trash` (Put Back info in Milan's `.milan-origins` format).
+- Maximized windows stop at the dock (it reserves its strip with `_NET_WM_STRUT_PARTIAL`).
+
+**Menu bar** across the top: a Hexley head at the far left, the frontmost app's menus, and the date and time at the far right. The Hexley menu has About Naples, Open Milan, dock position, **Log Out, Restart and Shut Down** (each asks first), and Quit Naples.
+
+## What you cannot do (yet)
+
+- No true see-through bar: the corners are an XShape mask and the fill is drawn translucent with `_NET_WM_WINDOW_OPACITY`, but real transparency needs a compositor or an alpha-capable window.
+- Apps that are not GNUstep apps running the Eau theme show only their name in the menu bar; they cannot push a menu.
+- Naples must be started before the other apps. An app that outlives a Naples restart is asked for its menu again, but reconnection depends on Eau.
+- No Spaces, no window previews on minimized items, no badges or bouncing icons.
+- Restart and Shut Down rely on iokit's session script (gsdm Xsession) reading `~/.session-request`; without it only Log Out works.
+- Darwin only (it uses `sysctl`, `kinfo_proc` and kqueue). It does not build on Linux.
+- Building needs a Mac and the iokit toolchain. There is no prebuilt package.
+
+## How it works
+
+Naples draws the bar and the dock as borderless X windows from AppKit, and reads the window manager's EWMH state over a GCD source on the X connection.
+
+- The clock redraws on a wall-clock-aligned `DISPATCH_SOURCE_TYPE_TIMER`.
+- Running state: `_NET_CLIENT_LIST` + `WM_STATE`, plus a process scan for apps with no normal window; a window's process and bundle come from `sysctl(KERN_PROCARGS2)`.
+- Children Naples starts are watched with `DISPATCH_SOURCE_TYPE_PROC` (kqueue `EVFILT_PROC`/`NOTE_EXIT`).
+- The Trash can fills/empties from a `DISPATCH_SOURCE_TYPE_VNODE` source on `~/.Trash`; moves to the Trash run on a global queue.
+- Log Out asks open applications to close their windows, then ends Window Maker (which is the session). Restart and Shut Down first leave a request in `~/.session-request` for the session script, which turns it into the exit status gsdm acts on.
 
 ## Menu bar
 
@@ -34,16 +53,7 @@ uses the same panels.
 
 Start Naples before the other apps (the session autostart): Eau looks the server up when it starts and retries every
 30 s. An app that outlives a Naples restart keeps a dead connection until its next push, so Naples asks every process for
-its menu one second after it starts (`requestApplicationMenuUpdate`), which makes Eau reconnect. Apps that are not GNUstep/Eau show just their name. The Hexley art is (c) 2000 Jon Hooper, all rights reserved,
-bundled under its own license as in Milan (`../milan/icons/app/README.md`), not under the MIT license.
-
-## How the pieces use XNU / GCD
-
-- The clock redraws on a wall-clock-aligned `DISPATCH_SOURCE_TYPE_TIMER`.
-- Running state: `_NET_CLIENT_LIST` + `WM_STATE` via a GCD read source on the X connection; a window's process and bundle
-  come from `sysctl(KERN_PROCARGS2)`.
-- Children Naples starts are watched with `DISPATCH_SOURCE_TYPE_PROC` (kqueue `EVFILT_PROC`/`NOTE_EXIT`).
-- The Trash can fills/empties from a `DISPATCH_SOURCE_TYPE_VNODE` source on `~/.Trash`; moves to the Trash run on a global queue.
+its menu one second after it starts (`requestApplicationMenuUpdate`), which makes Eau reconnect. Apps that are not GNUstep/Eau show just their name.
 
 ## Taking over minimizing
 
@@ -53,18 +63,33 @@ writes that into `$GNUSTEP_USER_ROOT/Defaults/WindowMaker` (default `~/GNUstep/D
 `_NET_CLIENT_LIST` with `WM_STATE = Iconic`, which is what the dock lists; clicking one sends `_NET_ACTIVE_WINDOW`, which Window
 Maker answers by de-iconifying.
 
-## Build
+## Building
 
-`./build.sh` (cross-builds with the iokit checkout, `IOKIT_DIR` defaults to `../iokit`; same recipe as Milan's),
-`./build.sh deploy` copies `Naples.app` to the Pi. Start it from the session autostart after Window Maker.
+You need a Mac with **Xcode 12** (the iPhoneOS SDK the port is built with) and a current Xcode for its linker, and the [iokit](https://github.com/anurodhp/xnu-iokit-pi3) repository checked out next to this one (`../iokit`, or set `IOKIT_DIR`) with its toolchain and GNUstep libraries already built.
+
+```sh
+./build.sh            # cross-build; Naples.app lands in iokit's libc_build/gnustep/root
+./build.sh deploy     # build, then copy Naples.app and Milan.app to the Pi
+```
+
+`deploy` uses `DEPLOY_HOST` (default `root@10.0.0.142`). It stops Naples and Milan on the Pi first, because replacing a running app's files has taken the whole X session down. Start Naples from the session autostart, after Window Maker and before the other apps.
 
 ## Defaults
 
 `NaplesIconSize` (44), `NaplesEdge` (0 bottom, 1 left, 2 right), `NaplesReserveSpace`, `NaplesMilanPath`,
 `NaplesTakeOverMinimize`. `NaplesPinned` is the pinned list (first run seeds it from `/Applications`).
 
-## Status
+## Layout
 
-Builds clean (`-Wall`). **Not yet run on the Pi.** Things to check first, per Milan's `docs/notes.md`: that the borderless
-dock window paints (a repaint is forced 0.5 s after launch), that drag and drop from Milan and within the dock works,
-that the menu overlay grows the window correctly on all three edges, and whether the dock renders translucent or solid.
+| | |
+|---|---|
+| `NaplesDock.m`, `NaplesDockView.m` | the dock: items, running state, drag and drop, Trash |
+| `NaplesBar.m`, `NaplesBarView.m` | the menu bar, the Eau menu server, the Hexley menu, power actions |
+| `NaplesPanel.m` | borderless windows for drop-down menus and the confirmation panel |
+| `NaplesX.m` | the X connection: EWMH, struts, shape masks |
+| `NaplesMenuProtocol.h` | the menu protocol (identical to Eau.h) |
+| `icons/`, `tools/make_icon.m` | Hexley head, the Naples icon and its generator |
+
+## Licence
+
+Naples is MIT licensed. The Hexley art is © 2000 Jon Hooper, all rights reserved, bundled under its own license as in Milan (`../milan/icons/app/README.md`), not under the MIT license.
