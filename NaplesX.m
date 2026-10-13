@@ -317,6 +317,14 @@ ignoreXError(Display *d, XErrorEvent *e)
 
 /* ---- Naples' own window ---- */
 
+- (BOOL) optionKeyDown
+{
+	Window r, c;
+	int rx, ry, wx, wy;
+	unsigned int mask = 0;
+	return dpy && XQueryPointer(dpy, root, &r, &c, &rx, &ry, &wx, &wy, &mask) && (mask & Mod1Mask);
+}
+
 - (BOOL) hasCompositor
 {
 	return dpy && XGetSelectionOwner(dpy, a.cm) != None;

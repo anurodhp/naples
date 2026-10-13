@@ -3,6 +3,7 @@
 #import "NaplesDock.h"
 #import "NaplesPanel.h"
 #import "NaplesSound.h"
+#import "NaplesWifi.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
 #include <sys/sysctl.h>
@@ -87,6 +88,7 @@ localSeparator(void)
 }
 
 - (NaplesSound *) sound { return sound; }
+- (NaplesWifi *) wifi { return wifi; }
 
 - (NSImage *) hexley
 {
@@ -119,6 +121,8 @@ localSeparator(void)
 	[window setContentView: view];
 	/* the speaker left of the clock; redraw when the volume or the panel changes */
 	sound = [[NaplesSound alloc] initWithChangeHandler: ^{ [view setNeedsDisplay: YES]; }];
+	/* the Wi-Fi fan left of the speaker; redraw when the link, the signal or the panel changes */
+	wifi = [[NaplesWifi alloc] initWithChangeHandler: ^{ [view setNeedsDisplay: YES]; }];
 
 	/* the menu server: Eau in every app looks this name up and pushes menus to it */
 	serverConnection = [[NSConnection alloc] init];

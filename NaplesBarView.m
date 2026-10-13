@@ -2,9 +2,11 @@
 #import "NaplesBar.h"
 #import "NaplesPanel.h"
 #import "NaplesSound.h"
+#import "NaplesWifi.h"
+#import "NaplesX.h"
 #include <time.h>
 
-enum { BarH = 22, Radius = 5, TitlesX = 44, SpeakerW = 20, SpeakerPad = 5 };
+enum { BarH = 22, Radius = 5, TitlesX = 44, SpeakerW = 20, SpeakerPad = 5, WifiW = 18, WifiPad = 5 };
 
 static BOOL
 isSep(NSDictionary *item)
@@ -205,17 +207,31 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 		NaplesDrawSpeaker(NSMakeRect(sx, NSMidY(hr) - 7, SpeakerW, 14), NaplesSpeakerWaves([s volume], [s muted]), [s muted],
 		                  [NSColor colorWithCalibratedWhite: 0.08 alpha: 1]);
 	}
+
+	wifiRect = NSZeroRect;
+	if ([[bar wifi] known]) {	/* Wi-Fi, left of the speaker (or of the clock): the arcs follow the signal */
+		NaplesWifi *w = [bar wifi];
+		CGFloat right = speakerRect.size.width ? NSMinX(speakerRect) : bounds.size.width - cs.width - 12 - 10 + SpeakerPad;
+		CGFloat wx = right - WifiPad - WifiW;
+		NSRect hr;
+		int bars = [w enabled] && [w associated] ? NaplesWifiBars([w rssi]) : 0;
+		wifiRect = NSMakeRect(wx - WifiPad, 0, WifiW + 2 * WifiPad, BarH);
+		hr = NSMakeRect(wifiRect.origin.x, barR.origin.y, wifiRect.size.width, BarH);
+		if ([w panelShowing]) { [[NSColor colorWithCalibratedWhite: 0 alpha: 0.14] set]; NSRectFill(hr); }
+		NaplesDrawWifi(NSMakeRect(wx, NSMidY(hr) - 6, WifiW, 13), bars, ![w enabled], [NSColor colorWithCalibratedWhite: 0.08 alpha: 1]);
+	}
 }
 
 /* ---- the bar's own mouse handling ---- */
 
-/* -1 nothing, -2 Hexley, -3 the speaker, else the item index of the title under p */
+/* -1 nothing, -2 Hexley, -3 the speaker, -4 Wi-Fi, else the item index of the title under p */
 - (NSInteger) barHit: (NSPoint)p
 {
 	NSUInteger k;
 	if (p.y < [self bounds].size.height - BarH) return -1;
 	if (p.x >= hexleyRect.origin.x && p.x < NSMaxX(hexleyRect)) return -2;
 	if (speakerRect.size.width && p.x >= speakerRect.origin.x && p.x < NSMaxX(speakerRect)) return -3;
+	if (wifiRect.size.width && p.x >= wifiRect.origin.x && p.x < NSMaxX(wifiRect)) return -4;
 	for (k = 0; k < [titleRects count]; k++) {
 		NSRect r = [[titleRects objectAtIndex: k] rectValue];
 		if (p.x >= r.origin.x && p.x < NSMaxX(r)) return [[titleIdx objectAtIndex: k] integerValue];
@@ -229,7 +245,7 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	[chain removeAllObjects];
 	hoverLevel = hoverRow = -1;
 	openTop = t;
-	if (t != -1) [[bar sound] hidePanel];
+	if (t != -1) { [[bar sound] hidePanel]; [[bar wifi] hidePanel]; }
 	if (t != -1) [bar prepareMenu];	/* fresh enabled/checked state from the application, as it is about to be shown */
 	[self refreshPanels];
 	[self setNeedsDisplay: YES];
@@ -249,7 +265,16 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	NSInteger b = [self barHit: [self convertPoint: [e locationInWindow] fromView: nil]];
 	if (b == -3) {	/* the speaker: the Sound panel hangs under it (screen x of the bar is the view's x) */
 		[self closeMenu];
+		[[bar wifi] hidePanel];
 		[[bar sound] togglePanelUnder: speakerRect];
+		return;
+	}
+	if (b == -4) {	/* Wi-Fi: its panel hangs under the fan */
+		[self closeMenu];
+		[[bar sound] hidePanel];
+		/* Option-click (Alt on a PC keyboard): the connection's details too, as on macOS. Read from the X server,
+		 * not [e modifierFlags], which never sees modifiers on the unfocused bar (see -[NaplesX optionKeyDown]). */
+		[[bar wifi] togglePanelUnder: wifiRect details: [[NaplesX shared] optionKeyDown]];
 		return;
 	}
 	if (b == -1) { [self closeMenu]; return; }
@@ -262,7 +287,7 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	NSInteger b;
 	if (openTop == -1) return;
 	b = [self barHit: [self convertPoint: [e locationInWindow] fromView: nil]];
-	if (b != -1 && b != -3 && b != openTop) [self openTopItem: b];	/* sliding along the bar switches menus */
+	if (b != -1 && b != -3 && b != -4 && b != openTop) [self openTopItem: b];	/* sliding along the bar switches menus */
 }
 
 - (void) mouseEntered: (NSEvent *)e { [NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(closeMenu) object: nil]; }

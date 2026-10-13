@@ -5,7 +5,7 @@
 #import <AppKit/AppKit.h>
 #import "NaplesMenuProtocol.h"
 
-@class NaplesDock, NaplesBarView, NaplesSound;
+@class NaplesDock, NaplesBarView, NaplesSound, NaplesWifi;
 
 enum { NaplesPowerLogOut = 0, NaplesPowerRestart = 1, NaplesPowerShutDown = 2 };
 
@@ -22,6 +22,7 @@ enum { NaplesPowerLogOut = 0, NaplesPowerRestart = 1, NaplesPowerShutDown = 2 };
 	NSImage *hexleyImage;
 	void *clockSource;
 	NaplesSound *sound;
+	NaplesWifi *wifi;
 	BOOL loadedHexley;
 }
 - (id) initWithDock: (NaplesDock *)d;
@@ -35,6 +36,7 @@ enum { NaplesPowerLogOut = 0, NaplesPowerRestart = 1, NaplesPowerShutDown = 2 };
 - (NSDictionary *) systemMenu;	/* the Hexley menu; items carry a "block" */
 - (NSImage *) hexley;
 - (NaplesSound *) sound;	/* the volume control; nil without audio (no libaudiohal) */
+- (NaplesWifi *) wifi;	/* the Wi-Fi control; nil without IOKitLib; draws nothing without the driver (wifi=1) */
 - (void) prepareMenu;	/* ask the application for fresh enabled/checked state before a menu opens */
 - (void) activatePath: (NSArray *)path;
 - (void) viewResized;	/* the view's menu opened, closed or cascaded: resize and re-shape the window */

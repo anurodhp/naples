@@ -19,6 +19,13 @@
 
 **Volume**: a speaker left of the clock whose waves (none to three) follow the volume. Click it for a small Sound panel with a slider. It sets the device volume of iokit's audio daemon `audiod`, which keeps it across restarts; without audio on the image the speaker is not shown.
 
+**Wi-Fi**: a Wi-Fi fan left of the speaker whose arcs follow the signal. All arcs are faint when Wi-Fi is on but not connected, and faint with a slash when it is off. Click it for the Wi-Fi panel:
+- an on/off switch;
+- the network you are connected to;
+- the networks in range, strongest first, with a lock on secured ones.
+
+Click a network to join it; a secured one that is not the remembered network asks for its password. **Option-click** (Alt) also shows the connection's details: IP address, router, BSSID, channel and band, security, 802.11 protocol, RSSI, noise and transmit rate. For the remembered network it adds **Forget This Network…**: after a confirmation, it leaves the network, removes it from `/etc/wifi.conf` so it is not joined again at boot or when Wi-Fi is turned on, and releases en1's address. It needs iokit's WiFi driver (boot-arg `wifi=1`); without it the icon is not shown.
+
 ## What you cannot do (yet)
 
 - No true see-through bar: the corners are an XShape mask and the fill is drawn translucent with `_NET_WM_WINDOW_OPACITY`, but real transparency needs a compositor or an alpha-capable window.
@@ -35,6 +42,11 @@ Naples draws the bar and the dock as borderless X windows from AppKit, and reads
 
 - The clock redraws on a wall-clock-aligned `DISPATCH_SOURCE_TYPE_TIMER`.
 - The volume goes through the CoreAudio HAL calls of `/usr/lib/libaudiohal.dylib` (opened with `dlopen`), on a serial GCD queue: each call is a Mach RPC to `audiod`. The library has no property listeners, so a volume another program sets shows when the Sound panel is next opened.
+- Wi-Fi talks to iokit's `BCM43430Wifi` driver through its user client, with IOKitLib opened by `dlopen` from `/usr/lib/libiokituser.dylib`. Calls run on a serial GCD queue, because a scan takes seconds and a join up to 20 s. The ABI header is iokit's `iokit/BCM43430Wifi/BCM43430WifiShared.h`; `build_naples.sh` puts it on the include path.
+  - A join remembers the network in `/etc/wifi.conf` (mode 600), which iokit's boot job joins at startup, and gets an address with `ipconfig set en1 DHCP`.
+  - Turning Wi-Fi off leaves `/etc/wifi.off`, so it stays off after a reboot.
+  - Option is read from the X server (`XQueryPointer`), because GNUstep fills an event's modifier flags only for a focused window, and the bar never has focus.
+  - The status is polled every 5 s, or 2 s while the panel is open; the panel rescans every 15 s while it is open.
 - Running state: `_NET_CLIENT_LIST` + `WM_STATE`, plus a process scan for apps with no normal window; a window's process and bundle come from `sysctl(KERN_PROCARGS2)`.
 - Children Naples starts are watched with `DISPATCH_SOURCE_TYPE_PROC` (kqueue `EVFILT_PROC`/`NOTE_EXIT`).
 - The Trash can fills/empties from a `DISPATCH_SOURCE_TYPE_VNODE` source on `~/.Trash`; moves to the Trash run on a global queue.
@@ -43,7 +55,7 @@ Naples draws the bar and the dock as borderless X windows from AppKit, and reads
 ## Menu bar
 
 A second window across the top (`NaplesBar`): a **Hexley head** at the far left (opens a system menu: About Naples, Open Milan, dock
-position, Quit Naples), the **frontmost app's menu titles** after it, and the **volume** and the **date and time** at the far right. It
+position, Quit Naples), the **frontmost app's menu titles** after it, and **Wi-Fi**, the **volume** and the **date and time** at the far right. It
 reserves its strip with a strut. Disable with `-NaplesBar NO`.
 
 It is the server end of the Eau theme's menu protocol (Distributed Objects, `org.gnustep.Gershwin.MenuServer`, see

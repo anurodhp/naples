@@ -35,6 +35,10 @@
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius;
 - (void) setShape: (unsigned long)xid rects: (NSArray *)rects radius: (int)radius square: (NSUInteger)square;
 - (BOOL) hasCompositor;
+/* Alt (X Mod1, Option on a PC keyboard) is held right now. NSEvent's modifier flags cannot tell: gnustep-back builds
+ * them from the key presses its focused window saw (process_modifier_flags(), XGServerEvent.m), and Naples' bar is
+ * never focused. */
+- (BOOL) optionKeyDown;
 /* Naples' own windows: left out of clientWindows and their property changes are not events (writing our own hints must
  * never wake us). GNUstep windows carry no _NET_WM_PID, so they cannot be told apart by process. */
 - (void) registerOwnWindow: (unsigned long)xid;
