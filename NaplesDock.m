@@ -478,6 +478,31 @@ scanBundleProcesses(void)
 	if ([items count]) [self activateItem: [items objectAtIndex: 0]];
 }
 
+/* Settings.app (the Turin project); NaplesSettingsPath overrides where it is */
+- (NSString *) findSettings
+{
+	NSString *p, *custom = [[NSUserDefaults standardUserDefaults] stringForKey: @"NaplesSettingsPath"];
+	NSArray *cands = [NSArray arrayWithObjects: @"/Applications/Settings.app", @"/usr/GNUstep/System/Applications/Settings.app",
+	                  [NSHomeDirectory() stringByAppendingPathComponent: @"Applications/Settings.app"],
+	                  @"/usr/local/GNUstep/Local/Applications/Settings.app", nil];
+	if (custom) cands = [[NSArray arrayWithObject: custom] arrayByAddingObjectsFromArray: cands];
+	for (p in cands) if ([[NSFileManager defaultManager] fileExistsAtPath: p]) return p;
+	return nil;
+}
+
+- (void) openSettings
+{
+	NSString *path = [self findSettings];
+	NaplesItem *it;
+	if (!path) { NSLog(@"Naples: Settings.app not found"); return; }
+	/* in the dock (pinned or running): as a click on it, which raises its window. A running app's path comes from
+	 * its executable, symlinks resolved, so compare resolved paths */
+	path = [path stringByResolvingSymlinksInPath];
+	for (it in items)
+		if (it->path && [[it->path stringByResolvingSymlinksInPath] isEqualToString: path]) { [self activateItem: it]; return; }
+	[self launch: path file: nil arguments: nil];
+}
+
 - (void) openFile: (NSString *)file withItem: (NaplesItem *)item
 {
 	if (item->path) [self launch: item->path file: file arguments: nil];

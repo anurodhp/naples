@@ -63,6 +63,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 
 - (void) activateItem: (NaplesItem *)item;	/* click */
 - (void) openMilan;	/* start Milan, or bring it forward */
+- (void) openSettings;	/* start Settings (Turin), or bring it forward */
 - (NSArray *) menuEntriesForItem: (NaplesItem *)item;	/* long click: nil item is the dock background */
 - (NSString *) toolTipForItem: (NaplesItem *)item;
 

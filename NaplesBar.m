@@ -378,6 +378,8 @@ pidOfClient(NSString *client)
 	int e;
 	[items addObject: localItem(@"About Naples", YES, ^{ [self showAbout]; })];
 	[items addObject: localSeparator()];
+	[items addObject: localItem(@"Settings\u2026", YES, ^{ [dock openSettings]; })];
+	[items addObject: localSeparator()];
 	[items addObject: localItem(@"Open Milan", YES, ^{ [dock openMilan]; })];
 	[items addObject: localSeparator()];
 	for (e = 0; e < 3; e++)

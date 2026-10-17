@@ -15,7 +15,7 @@
 - Drop files on the Trash to move them to `~/.Trash` (Put Back info in Milan's `.milan-origins` format).
 - Maximized windows stop at the dock (it reserves its strip with `_NET_WM_STRUT_PARTIAL`).
 
-**Menu bar** across the top: a Hexley head at the far left, the frontmost app's menus, and the volume and the date and time at the far right. The Hexley menu has About Naples, Open Milan, dock position, **Log Out, Restart and Shut Down** (each asks first), and Quit Naples.
+**Menu bar** across the top: a Hexley head at the far left, the frontmost app's menus, and the volume and the date and time at the far right. The Hexley menu has About Naples, **Settings…** (opens [Turin](https://github.com/anurodhp/Turin)'s Settings.app, or brings it forward), Open Milan, dock position, **Log Out, Restart and Shut Down** (each asks first), and Quit Naples.
 
 **Volume**: a speaker left of the clock whose waves (none to three) follow the volume. Click it for a small Sound panel with a slider. It sets the device volume of iokit's audio daemon `audiod`, which keeps it across restarts; without audio on the image the speaker is not shown.
 
@@ -54,8 +54,8 @@ Naples draws the bar and the dock as borderless X windows from AppKit, and reads
 
 ## Menu bar
 
-A second window across the top (`NaplesBar`): a **Hexley head** at the far left (opens a system menu: About Naples, Open Milan, dock
-position, Quit Naples), the **frontmost app's menu titles** after it, and **Wi-Fi**, the **volume** and the **date and time** at the far right. It
+A second window across the top (`NaplesBar`): a **Hexley head** at the far left (opens a system menu: About Naples, Settings…, Open Milan, dock
+position, Quit Naples, Log Out, Restart, Shut Down), the **frontmost app's menu titles** after it, and **Wi-Fi**, the **volume** and the **date and time** at the far right. It
 reserves its strip with a strut. Disable with `-NaplesBar NO`.
 
 It is the server end of the Eau theme's menu protocol (Distributed Objects, `org.gnustep.Gershwin.MenuServer`, see
