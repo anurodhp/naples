@@ -2,6 +2,7 @@
 #import "NaplesDockView.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
+#import <GNUstepBase/NSTask+GNUstepBase.h>
 #include <sys/sysctl.h>
 #include <signal.h>
 #include <fcntl.h>
@@ -409,6 +410,9 @@ scanBundleProcesses(void)
 	[t setCurrentDirectoryPath: NSHomeDirectory()];
 	[t setStandardOutput: [NSFileHandle fileHandleWithNullDevice]];
 	[t setStandardError: [NSFileHandle fileHandleWithNullDevice]];
+	/* the memory-pressure band the kernel kills first, by size (10, JETSAM_PRIORITY_FOREGROUND): an application, not the
+	 * session's own processes (gnustep-base NSTask+GNUstepBase.h -setJetsamPriority:; absent in an older gnustep-base) */
+	if ([t respondsToSelector: @selector(setJetsamPriority:)]) [t setJetsamPriority: 10];
 	NS_DURING
 		[t launch];
 	NS_HANDLER
