@@ -14,6 +14,7 @@
 - Drag `.app` bundles in from Milan, drag icons to reorder, drag an icon off the dock to remove it. Drop a document on an app icon to open it with that app.
 - Drop files on the Trash to move them to `~/.Trash` (Put Back info in Milan's `.milan-origins` format).
 - Maximized windows stop at the dock (it reserves its strip with `_NET_WM_STRUT_PARTIAL`).
+- Apps can put a **badge** on their icon, a red label at its top right corner such as [Mail2](https://github.com/anurodhp/mail2)'s unread count (see How it works).
 
 **Menu bar** across the top: a Hexley head at the far left, the frontmost app's menus, and the volume and the date and time at the far right. The Hexley menu has About Naples, **Settings…** (opens [Turin](https://github.com/anurodhp/Turin)'s Settings.app, or brings it forward), Open Milan, dock position, **Log Out, Restart and Shut Down** (each asks first), and Quit Naples.
 
@@ -31,7 +32,7 @@ Click a network to join it; a secured one that is not the remembered network ask
 - No true see-through bar: the corners are an XShape mask and the fill is drawn translucent with `_NET_WM_WINDOW_OPACITY`, but real transparency needs a compositor or an alpha-capable window.
 - Apps that are not GNUstep apps running the Eau theme show only their name in the menu bar; they cannot push a menu.
 - Naples must be started before the other apps. An app that outlives a Naples restart is asked for its menu again, but reconnection depends on Eau.
-- No Spaces, no window previews on minimized items, no badges or bouncing icons.
+- No Spaces, no window previews on minimized items, no bouncing icons for attention.
 - Restart and Shut Down rely on iokit's session script (gsdm Xsession) reading `$HOME/.session-request`; without it only Log Out works.
 - Darwin only (it uses `sysctl`, `kinfo_proc` and kqueue). It does not build on Linux.
 - Building needs a Mac and the iokit toolchain. There is no prebuilt package.
@@ -48,6 +49,11 @@ Naples draws the bar and the dock as borderless X windows from AppKit, and reads
   - Option is read from the X server (`XQueryPointer`), because GNUstep fills an event's modifier flags only for a focused window, and the bar never has focus.
   - The status is polled every 5 s, or 2 s while the panel is open; the panel rescans every 15 s while it is open.
 - Running state: `_NET_CLIENT_LIST` + `WM_STATE`, plus a process scan for apps with no normal window; a window's process and bundle come from `sysctl(KERN_PROCARGS2)`.
+- Badges: an app posts the distributed notification `NaplesBadgeChanged` with `userInfo` `{App = "<the .app bundle's name>"; Badge = "<label>"}` (at most four characters; an empty label removes it). Naples shows it while the app runs and drops it when the app quits, so a crashed app does not leave a stale count. It needs `gdnc`, which the session starts. From an app:
+  ```objc
+  [[NSDistributedNotificationCenter defaultCenter] postNotificationName: @"NaplesBadgeChanged" object: @"Mail2"
+      userInfo: [NSDictionary dictionaryWithObjectsAndKeys: @"Mail2", @"App", @"3", @"Badge", nil] deliverImmediately: YES];
+  ```
 - Children Naples starts are watched with `DISPATCH_SOURCE_TYPE_PROC` (kqueue `EVFILT_PROC`/`NOTE_EXIT`).
 - The Trash can fills/empties from a `DISPATCH_SOURCE_TYPE_VNODE` source on `~/.Trash`; moves to the Trash run on a global queue.
 - Log Out asks open applications to close their windows, then ends Window Maker (which is the session). Restart and Shut Down first leave a request in `$HOME/.session-request` (the session's HOME, not GNUstep's home folder, which for root is `/`) for the session script, which turns it into the exit status gsdm acts on.

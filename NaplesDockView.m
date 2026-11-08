@@ -204,6 +204,25 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 	[s drawAtPoint: NSMakePoint(NSMidX(r) - sz.width / 2, NSMidY(r) - sz.height / 2) withAttributes: attrs];
 }
 
+/* an app's badge: white text on a red pill over the icon's top right corner, as on macOS */
+static void
+drawBadge(NSRect icon, NSString *label)
+{
+	CGFloat h = MAX(16, floor(icon.size.height * 0.42));
+	NSDictionary *attrs = [NSDictionary dictionaryWithObjectsAndKeys: [NSFont boldSystemFontOfSize: floor(h * 0.62)], NSFontAttributeName,
+	                       [NSColor whiteColor], NSForegroundColorAttributeName, nil];
+	NSSize ts = [label sizeWithAttributes: attrs];
+	CGFloat w = MAX(h, ceil(ts.width) + h * 0.6);
+	NSRect pill = NSMakeRect(NSMaxX(icon) - w + h * 0.25, NSMaxY(icon) - h + h * 0.2, w, h);
+	NSBezierPath *p = [NSBezierPath bezierPathWithRoundedRect: pill xRadius: h / 2 yRadius: h / 2];
+	[[NSColor colorWithCalibratedRed: 0.94 green: 0.23 blue: 0.19 alpha: 1] set];
+	[p fill];
+	[[NSColor colorWithCalibratedWhite: 1 alpha: 0.85] set];
+	[p setLineWidth: 1.2];
+	[p stroke];
+	[label drawAtPoint: NSMakePoint(NSMidX(pill) - ts.width / 2, NSMidY(pill) - ts.height / 2) withAttributes: attrs];
+}
+
 - (void) drawIconOf: (NaplesItem *)it inRect: (NSRect)r alpha: (CGFloat)alpha
 {
 	if (it->kind == NaplesItemTrash) {	/* the same artwork Milan uses: the theme's empty / full recycler */
@@ -281,6 +300,7 @@ drawGeneric(NSRect r, NSString *name, CGFloat alpha)
 			}
 			[self drawIconOf: it inRect: r alpha: alpha];
 		}
+		if ([it->badge length] && it->kind != NaplesItemWindow) drawBadge(r, it->badge);
 		if ([it running]) {	/* the white dot sits between the icon and the screen edge */
 			NSRect d;
 			if ([self horizontal]) d = NSMakeRect(NSMidX(r) - 2, bar.origin.y + 4, 4, 4);

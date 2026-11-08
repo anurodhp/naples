@@ -5,7 +5,11 @@
  * Pinned apps are the user's list (drag in, drag out, reorder) and persist in NSUserDefaults. A running app shows a
  * white dot. Running state comes from the window manager (_NET_CLIENT_LIST) and from the processes Naples started
  * (a GCD DISPATCH_SOURCE_TYPE_PROC source per child). Minimizing belongs to Naples: Window Maker is configured not to
- * draw miniwindows and the dock lists every minimized window instead. */
+ * draw miniwindows and the dock lists every minimized window instead.
+ *
+ * Badges: an app puts a label on its dock icon (an unread count, as Mail2 does) by posting the distributed notification
+ * "NaplesBadgeChanged" with userInfo {App = "<its name, as its .app bundle is named>"; Badge = "<label>"}; an empty
+ * label removes it. The badge shows while the app runs and goes when it quits. */
 #import <AppKit/AppKit.h>
 
 typedef enum { NaplesEdgeBottom = 0, NaplesEdgeLeft = 1, NaplesEdgeRight = 2 } NaplesEdge;
@@ -25,6 +29,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 	unsigned long xid;	/* NaplesItemWindow: the minimized window */
 	BOOL trashFull;
 	NSTimeInterval launchStart;	/* when the app was started and has no window yet (the icon bounces), else 0 */
+	NSString *badge;	/* the app's badge label ("3"), nil for none: see NaplesBadgeChanged in NaplesDock.m */
 }
 - (BOOL) running;
 @end
@@ -55,6 +60,7 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 	NSDictionary *lastScan;	/* bundle -> pids from the last process scan */
 	BOOL layoutHold, layoutDeferred;	/* no window changes while a drag session runs in the view */
 	NSRect backdropRect;	/* X coordinates of the bar the current backdrop was cut for */
+	NSMutableDictionary *badges;	/* lowercased app name -> [label, NSDate posted] */
 }
 - (void) start;
 - (NSArray *) items;

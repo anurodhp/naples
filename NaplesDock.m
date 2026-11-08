@@ -18,7 +18,7 @@ enum { ScreenMargin = 3 };
 - (BOOL) running { return [pids count] > 0; }
 - (void) dealloc
 {
-	[path release]; [name release]; [icon release]; [pids release]; [windows release];
+	[path release]; [name release]; [icon release]; [pids release]; [windows release]; [badge release];
 	[super dealloc];
 }
 @end
@@ -130,6 +130,11 @@ scanBundleProcesses(void)
 				[pinned addObject: [@"/Applications" stringByAppendingPathComponent: f]];
 		[self savePinned];
 	}
+
+	/* badges from apps (NaplesDock.h); needs gdnc, which the session starts */
+	badges = [[NSMutableDictionary alloc] init];
+	[[NSDistributedNotificationCenter defaultCenter] addObserver: self selector: @selector(badgeChanged:)
+	                                                        name: @"NaplesBadgeChanged" object: nil];
 
 	[[NaplesX shared] connect];
 	[[NaplesX shared] setChangeHandler: ^{ [self rebuild]; }];
@@ -317,6 +322,7 @@ scanBundleProcesses(void)
 		if (it && !it->pinned && it != milan) [list addObject: it];
 	}
 	[list addObjectsFromArray: minimized];
+	[self applyBadges: list];
 	it = [self makeItem: NaplesItemTrash path: nil name: @"Trash"];
 	it->trashFull = trashFull;
 	[list addObject: it];
@@ -324,6 +330,42 @@ scanBundleProcesses(void)
 	[items release];
 	items = [list retain];
 	[self relayout];
+}
+
+/* ---- badges ---- */
+
+- (void) badgeChanged: (NSNotification *)n
+{
+	NSDictionary *info = [n userInfo];
+	NSString *app = [info objectForKey: @"App"], *label = [info objectForKey: @"Badge"];
+	if (![app isKindOfClass: [NSString class]] && [[n object] isKindOfClass: [NSString class]]) app = [n object];
+	if (![app isKindOfClass: [NSString class]] || ![app length]) return;
+	if ([label isKindOfClass: [NSNumber class]]) label = [(NSNumber *)label intValue] > 0 ? [(id)label stringValue] : @"";
+	if (![label isKindOfClass: [NSString class]]) label = @"";
+	if ([label length] > 4) label = [label substringToIndex: 4];
+	if ([label length]) [badges setObject: [NSArray arrayWithObjects: label, [NSDate date], nil] forKey: [app lowercaseString]];
+	else [badges removeObjectForKey: [app lowercaseString]];
+	[self rebuild];
+}
+
+/* puts each running app's badge on its item; a badge whose app is no longer running goes (the app quit or crashed
+ * without clearing it), unless it was posted in the last 10 s: an app that has just started may not be seen yet */
+- (void) applyBadges: (NSArray *)list
+{
+	NSMutableSet *running = [NSMutableSet set];
+	NaplesItem *it;
+	NSString *k;
+	for (it in list) {
+		NSString *key;
+		if ((it->kind != NaplesItemApp && it->kind != NaplesItemMilan) || ![it running]) continue;
+		key = [(it->path ? [self nameForBundle: it->path] : it->name) lowercaseString];
+		[running addObject: key];
+		[it->badge release];
+		it->badge = [[[badges objectForKey: key] objectAtIndex: 0] retain];
+	}
+	for (k in [badges allKeys])
+		if (![running containsObject: k] && -[[[badges objectForKey: k] objectAtIndex: 1] timeIntervalSinceNow] > 10)
+			[badges removeObjectForKey: k];
 }
 
 /* ---- window placement ---- */
