@@ -1,5 +1,5 @@
 /* NaplesBarView: the top menu bar. Hexley head at the far left (opens the system menu), the frontmost application's
- * menu titles after it, the date and time at the far right with the volume (speaker) and Wi-Fi left of it. Drop-down menus and their cascading submenus are overlays
+ * menu titles after it, the date and time at the far right with the volume (speaker), Wi-Fi and Bluetooth left of it. Drop-down menus and their cascading submenus are overlays
  * drawn by this view (the window grows downward while a menu is open; see NaplesBar). */
 #import <AppKit/AppKit.h>
 
@@ -14,6 +14,7 @@
 	NSRect hexleyRect;
 	NSRect speakerRect;	/* top-down y; empty when there is no volume control */
 	NSRect wifiRect;	/* top-down y; empty when there is no Wi-Fi */
+	NSRect btRect;	/* top-down y; empty when there is no Bluetooth */
 	NSInteger openTop;	/* -1 closed, -2 the system (Hexley) menu, else index of the open top-level item */
 	NSMutableArray *chain;	/* NSNumber row indices of the cascade, one per open submenu */
 	NSInteger hoverLevel, hoverRow;

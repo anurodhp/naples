@@ -3,10 +3,11 @@
 #import "NaplesPanel.h"
 #import "NaplesSound.h"
 #import "NaplesWifi.h"
+#import "NaplesBluetooth.h"
 #import "NaplesX.h"
 #include <time.h>
 
-enum { BarH = 22, Radius = 5, TitlesX = 44, SpeakerW = 20, SpeakerPad = 5, WifiW = 18, WifiPad = 5 };
+enum { BarH = 22, Radius = 5, TitlesX = 44, SpeakerW = 20, SpeakerPad = 5, WifiW = 18, WifiPad = 5, BtW = 10, BtPad = 6 };
 
 static BOOL
 isSep(NSDictionary *item)
@@ -220,11 +221,24 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 		if ([w panelShowing]) { [[NSColor colorWithCalibratedWhite: 0 alpha: 0.14] set]; NSRectFill(hr); }
 		NaplesDrawWifi(NSMakeRect(wx, NSMidY(hr) - 6, WifiW, 13), bars, ![w enabled], [NSColor colorWithCalibratedWhite: 0.08 alpha: 1]);
 	}
+
+	btRect = NSZeroRect;
+	if ([[bar bluetooth] known]) {	/* Bluetooth, left of Wi-Fi (or of the speaker, or of the clock) */
+		NaplesBluetooth *bt = [bar bluetooth];
+		CGFloat right = wifiRect.size.width ? NSMinX(wifiRect) : speakerRect.size.width ? NSMinX(speakerRect)
+		              : bounds.size.width - cs.width - 12 - 10 + SpeakerPad;
+		CGFloat bx = right - BtPad - BtW;
+		NSRect hr;
+		btRect = NSMakeRect(bx - BtPad, 0, BtW + 2 * BtPad, BarH);
+		hr = NSMakeRect(btRect.origin.x, barR.origin.y, btRect.size.width, BarH);
+		if ([bt panelShowing]) { [[NSColor colorWithCalibratedWhite: 0 alpha: 0.14] set]; NSRectFill(hr); }
+		NaplesDrawBluetooth(NSMakeRect(bx, NSMidY(hr) - 7, BtW, 14), ![bt enabled], [NSColor colorWithCalibratedWhite: 0.08 alpha: 1]);
+	}
 }
 
 /* ---- the bar's own mouse handling ---- */
 
-/* -1 nothing, -2 Hexley, -3 the speaker, -4 Wi-Fi, else the item index of the title under p */
+/* -1 nothing, -2 Hexley, -3 the speaker, -4 Wi-Fi, -5 Bluetooth, else the item index of the title under p */
 - (NSInteger) barHit: (NSPoint)p
 {
 	NSUInteger k;
@@ -232,6 +246,7 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	if (p.x >= hexleyRect.origin.x && p.x < NSMaxX(hexleyRect)) return -2;
 	if (speakerRect.size.width && p.x >= speakerRect.origin.x && p.x < NSMaxX(speakerRect)) return -3;
 	if (wifiRect.size.width && p.x >= wifiRect.origin.x && p.x < NSMaxX(wifiRect)) return -4;
+	if (btRect.size.width && p.x >= btRect.origin.x && p.x < NSMaxX(btRect)) return -5;
 	for (k = 0; k < [titleRects count]; k++) {
 		NSRect r = [[titleRects objectAtIndex: k] rectValue];
 		if (p.x >= r.origin.x && p.x < NSMaxX(r)) return [[titleIdx objectAtIndex: k] integerValue];
@@ -245,7 +260,7 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	[chain removeAllObjects];
 	hoverLevel = hoverRow = -1;
 	openTop = t;
-	if (t != -1) { [[bar sound] hidePanel]; [[bar wifi] hidePanel]; }
+	if (t != -1) { [[bar sound] hidePanel]; [[bar wifi] hidePanel]; [[bar bluetooth] hidePanel]; }
 	if (t != -1) [bar prepareMenu];	/* fresh enabled/checked state from the application, as it is about to be shown */
 	[self refreshPanels];
 	[self setNeedsDisplay: YES];
@@ -266,15 +281,24 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	if (b == -3) {	/* the speaker: the Sound panel hangs under it (screen x of the bar is the view's x) */
 		[self closeMenu];
 		[[bar wifi] hidePanel];
+		[[bar bluetooth] hidePanel];
 		[[bar sound] togglePanelUnder: speakerRect];
 		return;
 	}
 	if (b == -4) {	/* Wi-Fi: its panel hangs under the fan */
 		[self closeMenu];
 		[[bar sound] hidePanel];
+		[[bar bluetooth] hidePanel];
 		/* Option-click (Alt on a PC keyboard): the connection's details too, as on macOS. Read from the X server,
 		 * not [e modifierFlags], which never sees modifiers on the unfocused bar (see -[NaplesX optionKeyDown]). */
 		[[bar wifi] togglePanelUnder: wifiRect details: [[NaplesX shared] optionKeyDown]];
+		return;
+	}
+	if (b == -5) {	/* Bluetooth: its panel hangs under the rune */
+		[self closeMenu];
+		[[bar sound] hidePanel];
+		[[bar wifi] hidePanel];
+		[[bar bluetooth] togglePanelUnder: btRect];
 		return;
 	}
 	if (b == -1) { [self closeMenu]; return; }
@@ -287,7 +311,7 @@ textAttrs(BOOL enabled, BOOL selected, BOOL bold)
 	NSInteger b;
 	if (openTop == -1) return;
 	b = [self barHit: [self convertPoint: [e locationInWindow] fromView: nil]];
-	if (b != -1 && b != -3 && b != -4 && b != openTop) [self openTopItem: b];	/* sliding along the bar switches menus */
+	if (b != -1 && b != -3 && b != -4 && b != -5 && b != openTop) [self openTopItem: b];	/* sliding along the bar switches menus */
 }
 
 - (void) mouseEntered: (NSEvent *)e { [NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(closeMenu) object: nil]; }

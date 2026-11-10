@@ -27,6 +27,14 @@
 
 Click a network to join it; a secured one that is not the remembered network asks for its password. **Option-click** (Alt) also shows the connection's details: IP address, router, BSSID, channel and band, security, 802.11 protocol, RSSI, noise and transmit rate. For the remembered network it adds **Forget This Network…**: after a confirmation, it leaves the network, removes it from `/etc/wifi.conf` so it is not joined again at boot or when Wi-Fi is turned on, and releases en1's address. It needs iokit's WiFi driver (boot-arg `wifi=1`); without it the icon is not shown.
 
+**Bluetooth**: the Bluetooth rune left of Wi-Fi, faint with a slash when Bluetooth is off. Click it for the Bluetooth panel:
+- an on/off switch;
+- **My Devices**: the paired keyboards and mice, each Connected or Not Connected. Click one for **Forget This Device…**;
+- **Nearby Devices**, found while the panel is open (10 s per search). Click one to pair it. For a keyboard, a dialog shows the code to type on it, then Return; a mouse pairs without one;
+- **Bluetooth Settings…**, which opens Settings on its Bluetooth pane.
+
+It needs iokit's Bluetooth stack (boot-arg `bt=1` and `/usr/sbin/btsetup`); without it the icon is not shown.
+
 ## What you cannot do (yet)
 
 - No true see-through bar: the corners are an XShape mask and the fill is drawn translucent with `_NET_WM_WINDOW_OPACITY`, but real transparency needs a compositor or an alpha-capable window.
@@ -47,6 +55,7 @@ Naples draws the bar and the dock as borderless X windows from AppKit, and reads
   - A join remembers the network in `/etc/wifi.conf` (mode 600), which iokit's boot job joins at startup, and gets an address with `ipconfig set en1 DHCP`.
   - Turning Wi-Fi off leaves `/etc/wifi.off`, so it stays off after a reboot.
   - Option is read from the X server (`XQueryPointer`), because GNUstep fills an event's modifier flags only for a focused window, and the bar never has focus.
+- Bluetooth runs iokit's `/usr/sbin/btsetup` (`status`, `power`, `scan`, `pair`, `forget`), which drives NetBSD's Bluetooth tools and prints tab-separated lines. Calls run on GCD queues, because a search takes 10 s and pairing up to 90 s. The pairing code comes from `btsetup pair` as it runs. Bluetooth Settings… posts the distributed notification `TurinShowPane` `{Pane = Bluetooth}` to a running Settings, or starts it with `-TurinPane Bluetooth`. The status is polled every 5 s, or 2 s while the panel is open.
   - The status is polled every 5 s, or 2 s while the panel is open; the panel rescans every 15 s while it is open.
 - Running state: `_NET_CLIENT_LIST` + `WM_STATE`, plus a process scan for apps with no normal window; a window's process and bundle come from `sysctl(KERN_PROCARGS2)`.
 - Badges: an app posts the distributed notification `NaplesBadgeChanged` with `userInfo` `{App = "<the .app bundle's name>"; Badge = "<label>"}` (at most four characters; an empty label removes it). Naples shows it while the app runs and drops it when the app quits, so a crashed app does not leave a stale count. It needs `gdnc`, which the session starts. From an app:

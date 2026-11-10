@@ -4,6 +4,7 @@
 #import "NaplesPanel.h"
 #import "NaplesSound.h"
 #import "NaplesWifi.h"
+#import "NaplesBluetooth.h"
 #import "NaplesX.h"
 #import <GNUstepGUI/GSDisplayServer.h>
 #include <sys/sysctl.h>
@@ -89,6 +90,7 @@ localSeparator(void)
 
 - (NaplesSound *) sound { return sound; }
 - (NaplesWifi *) wifi { return wifi; }
+- (NaplesBluetooth *) bluetooth { return bluetooth; }
 
 - (NSImage *) hexley
 {
@@ -123,6 +125,9 @@ localSeparator(void)
 	sound = [[NaplesSound alloc] initWithChangeHandler: ^{ [view setNeedsDisplay: YES]; }];
 	/* the Wi-Fi fan left of the speaker; redraw when the link, the signal or the panel changes */
 	wifi = [[NaplesWifi alloc] initWithChangeHandler: ^{ [view setNeedsDisplay: YES]; }];
+	/* the Bluetooth rune left of Wi-Fi; Bluetooth Settings… opens Settings on its Bluetooth pane */
+	bluetooth = [[NaplesBluetooth alloc] initWithChangeHandler: ^{ [view setNeedsDisplay: YES]; }
+	                                              openSettings: ^{ [dock openSettingsPane: @"Bluetooth"]; }];
 
 	/* the menu server: Eau in every app looks this name up and pushes menus to it */
 	serverConnection = [[NSConnection alloc] init];

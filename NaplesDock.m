@@ -549,6 +549,21 @@ scanBundleProcesses(void)
 	[self launch: path file: nil arguments: nil];
 }
 
+- (void) openSettingsPane: (NSString *)pane
+{
+	NSString *path = [[self findSettings] stringByResolvingSymlinksInPath];
+	NaplesItem *it;
+	if (!path) { NSLog(@"Naples: Settings.app not found"); return; }
+	for (it in items)
+		if (it->path && [it->pids count] && [[it->path stringByResolvingSymlinksInPath] isEqualToString: path]) {
+			[[NSDistributedNotificationCenter defaultCenter] postNotificationName: @"TurinShowPane" object: nil
+			    userInfo: [NSDictionary dictionaryWithObject: pane forKey: @"Pane"] deliverImmediately: YES];
+			[self activateItem: it];
+			return;
+		}
+	[self launch: path file: nil arguments: [NSArray arrayWithObjects: @"-TurinPane", pane, nil]];
+}
+
 - (void) openFile: (NSString *)file withItem: (NaplesItem *)item
 {
 	if (item->path) [self launch: item->path file: file arguments: nil];

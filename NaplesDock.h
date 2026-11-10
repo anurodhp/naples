@@ -70,6 +70,9 @@ extern NSString *const NaplesPboardType;	/* a dock item being dragged: payload i
 - (void) activateItem: (NaplesItem *)item;	/* click */
 - (void) openMilan;	/* start Milan, or bring it forward */
 - (void) openSettings;	/* start Settings (Turin), or bring it forward */
+/* the same, on one pane ("Bluetooth"): a running Settings is asked over the distributed notification TurinShowPane
+ * {Pane}; a new one starts with -TurinPane */
+- (void) openSettingsPane: (NSString *)pane;
 - (NSArray *) menuEntriesForItem: (NaplesItem *)item;	/* long click: nil item is the dock background */
 - (NSString *) toolTipForItem: (NaplesItem *)item;
 
